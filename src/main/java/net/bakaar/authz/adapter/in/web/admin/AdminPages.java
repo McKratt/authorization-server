@@ -3,6 +3,7 @@ package net.bakaar.authz.adapter.in.web.admin;
 import gg.jte.Content;
 import gg.jte.TemplateEngine;
 import gg.jte.output.StringOutput;
+import io.helidon.http.ForbiddenException;
 import io.helidon.http.HeaderName;
 import io.helidon.http.HeaderNames;
 import io.helidon.http.Status;
@@ -27,6 +28,9 @@ public final class AdminPages {
 
     /** Reloads the open tab and closes the dialog; {@code authz:changed} first, while the form is still attached. */
     static final String CHANGED_TRIGGER = "{\"authz:changed\":true,\"authz:close-dialog\":true}";
+
+    /** Reloads the open tab; the dialog stays open with the refreshed content. */
+    static final String DIALOG_CHANGED_TRIGGER = "{\"authz:changed\":true}";
 
     private final TemplateEngine templates;
 
@@ -61,6 +65,16 @@ public final class AdminPages {
     }
 
     /**
+     * A write inside a dialog succeeded and the dialog stays open: 200 with the refreshed dialog, and the open tab
+     * reloads.
+     */
+    public void renderChanged(ServerRequest request, ServerResponse response, String template,
+                              Map<String, Object> model) {
+        response.header(HX_TRIGGER, DIALOG_CHANGED_TRIGGER);
+        render(request, response, Status.OK_200, template, model);
+    }
+
+    /**
      * A dialog write succeeded: 204 without body; htmx closes the dialog and the open tab reloads itself.
      */
     public void changed(ServerResponse response) {
@@ -77,6 +91,15 @@ public final class AdminPages {
         response.status(Status.NOT_FOUND_404)
                 .header(HeaderNames.CACHE_CONTROL, "no-store")
                 .send();
+    }
+
+    /**
+     * For GET dialogs that only lead to writes: readers get 403. The filter already guards the writes themselves.
+     */
+    static void requireWriter(ServerRequest request) {
+        if (!AdminAuthFilter.session(request).canWrite()) {
+            throw new ForbiddenException("The authz-admin role is required");
+        }
     }
 
     /**

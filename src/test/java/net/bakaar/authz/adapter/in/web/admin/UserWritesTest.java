@@ -405,8 +405,7 @@ class UserWritesTest {
         long billingViewer = database.idOf("role", "billing/viewer");
         for (String path : new String[] {"/admin/users/123/grants/new", "/admin/users/abc", "/admin/users/123",
                 "/admin/users/123/delete", "/admin/users/" + bob + "/grants/" + billingViewer + "/delete",
-                "/admin/applications/123/role-options", "/admin/applications/abc/role-options",
-                "/admin/applications"}) {
+                "/admin/applications/123/role-options", "/admin/applications/abc/role-options"}) {
             as(admin).when().get(path).then().statusCode(404).body(emptyString());
         }
         as(admin).header("X-CSRF-Token", admin.csrf())

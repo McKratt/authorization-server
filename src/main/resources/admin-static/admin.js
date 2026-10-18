@@ -85,6 +85,31 @@
             {target: target, swap: 'innerHTML'});
     }
 
+    // The new application dialog: "+ Add role" appends an empty row from the form's template, × removes a row.
+    function addRoleRow(button) {
+        var form = button.closest('form');
+        var rows = form && form.querySelector('[data-role-rows]');
+        var template = form && form.querySelector('template[data-role-row-template]');
+        if (!rows || !template) {
+            return;
+        }
+        var row = template.content.firstElementChild.cloneNode(true);
+        rows.appendChild(row);
+        row.querySelector('input').focus();
+    }
+
+    function removeRoleRow(button) {
+        var row = button.closest('.role-row');
+        var form = button.closest('form');
+        if (row) {
+            row.remove();
+        }
+        var add = form && form.querySelector('[data-add-role]');
+        if (add) {
+            add.focus();
+        }
+    }
+
     document.addEventListener('click', function (event) {
         if (event.target.closest('#theme-toggle')) {
             var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
@@ -93,6 +118,14 @@
         }
         if (event.target.closest('[data-close-dialog]')) {
             closeDialog();
+        }
+        var addRole = event.target.closest('[data-add-role]');
+        if (addRole) {
+            addRoleRow(addRole);
+        }
+        var removeRole = event.target.closest('[data-remove-role]');
+        if (removeRole) {
+            removeRoleRow(removeRole);
         }
     });
 
