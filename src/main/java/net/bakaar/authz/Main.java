@@ -1,11 +1,16 @@
 package net.bakaar.authz;
 
 import com.zaxxer.hikari.HikariDataSource;
+import gg.jte.ContentType;
+import gg.jte.TemplateEngine;
 import io.helidon.config.Config;
+import io.helidon.http.HttpException;
 import io.helidon.http.Status;
 import io.helidon.logging.common.LogConfig;
 import io.helidon.webserver.WebServer;
 import io.helidon.webserver.http.HttpRouting;
+import io.helidon.webserver.staticcontent.ClasspathHandlerConfig;
+import io.helidon.webserver.staticcontent.StaticContentFeature;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Base64;
@@ -13,6 +18,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import net.bakaar.authz.adapter.in.web.admin.AdminPages;
 import net.bakaar.authz.adapter.in.web.admin.UsersRoutes;
 import net.bakaar.authz.adapter.in.web.admin.auth.AdminAuthFilter;
 import net.bakaar.authz.adapter.in.web.admin.auth.LoginRoutes;
@@ -24,8 +30,13 @@ import net.bakaar.authz.adapter.in.web.api.AuthorizationApi;
 import net.bakaar.authz.adapter.out.idp.JwtAccessTokenVerifier;
 import net.bakaar.authz.adapter.out.idp.JwtSettings;
 import net.bakaar.authz.adapter.out.persistence.Database;
+import net.bakaar.authz.adapter.out.persistence.JdbcApplicationStore;
+import net.bakaar.authz.adapter.out.persistence.JdbcGrantStore;
+import net.bakaar.authz.adapter.out.persistence.JdbcTransactions;
+import net.bakaar.authz.adapter.out.persistence.JdbcUserStore;
 import net.bakaar.authz.adapter.out.persistence.UserRolesPersistenceAdapter;
 import net.bakaar.authz.application.domain.service.AuthorizationService;
+import net.bakaar.authz.application.domain.service.UserAdminService;
 import net.bakaar.authz.application.port.in.GetAuthorization;
 
 public final class Main {
@@ -56,7 +67,7 @@ public final class Main {
         GetAuthorization getAuthorization = new AuthorizationService(
                 new JwtAccessTokenVerifier(JwtSettings.fromConfig(config.get("jwt"))),
                 new UserRolesPersistenceAdapter(dataSource));
-        Consumer<HttpRouting.Builder> adminUi = adminUi(config.get("admin"));
+        Consumer<HttpRouting.Builder> adminUi = adminUi(config.get("admin"), dataSource);
 
         WebServer webServer = WebServer.builder()
                 .config(config.get("server"))
@@ -70,7 +81,7 @@ public final class Main {
      * Routes of the admin UI, or none when {@code admin.oidc.issuer} is not configured. Nothing here contacts
      * Keycloak: discovery happens on the first sign-in, so the server starts while Keycloak is unreachable.
      */
-    private static Consumer<HttpRouting.Builder> adminUi(Config admin) {
+    private static Consumer<HttpRouting.Builder> adminUi(Config admin, HikariDataSource dataSource) {
         Optional<OidcSettings> oidcSettings = OidcSettings.fromConfig(admin);
         if (oidcSettings.isEmpty()) {
             LOGGER.warning("admin.oidc.issuer is not configured: the admin UI is disabled");
@@ -86,9 +97,17 @@ public final class Main {
                 .build());
         LoginRoutes login = new LoginRoutes(oidc, settings, cookies,
                 admin.get("session-duration").as(Duration.class).orElse(Duration.ofHours(8)));
+        JdbcTransactions transactions = new JdbcTransactions(dataSource);
+        UserAdminService userAdmin = new UserAdminService(transactions, new JdbcUserStore(transactions),
+                new JdbcApplicationStore(transactions), new JdbcGrantStore(transactions));
+        // precompiled by jte-maven-plugin: rendering needs no Java compiler at runtime
+        AdminPages pages = new AdminPages(TemplateEngine.createPrecompiled(ContentType.Html));
         return routing -> routing.addFilter(new AdminAuthFilter(cookies))
+                .register("/admin/static", StaticContentFeature.createService(ClasspathHandlerConfig.builder()
+                        .location("admin-static")
+                        .build()))
                 .register(login)
-                .register("/admin", new UsersRoutes());
+                .register("/admin", new UsersRoutes(pages, userAdmin));
     }
 
     /**
@@ -114,6 +133,9 @@ public final class Main {
                         Consumer<HttpRouting.Builder> adminUi) {
         adminUi.accept(routing);
         routing.register("/api/v1/authorizations", new AuthorizationApi(getAuthorization))
+                // Helidon's own HTTP errors, e.g. 404 for an unknown route: their status, no body
+                .error(HttpException.class, (request, response, exception) ->
+                        response.status(exception.status()).send())
                 .error(Exception.class, (request, response, exception) -> {
                     // never leak exception details to the caller
                     LOGGER.log(Level.SEVERE, "Unhandled error on " + request.path().path(), exception);

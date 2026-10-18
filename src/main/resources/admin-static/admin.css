@@ -1,0 +1,402 @@
+/*
+ * Admin UI theme: pastel, light and dark.
+ *
+ * Vendored: htmx.min.js is htmx 2.0.11, from https://unpkg.com/htmx.org@2.0.11/dist/htmx.min.js
+ *
+ * Every color is a custom property on :root. Light is the default; dark applies when the system prefers it
+ * (unless the user picked light) or when the user picked dark. The theme tokens are those of the approved
+ * mockup. Where a token fails WCAG AA as small text (--muted on tinted surfaces, --accent, --danger), text uses
+ * the *-text / --accent-strong variants instead, which pass AA (4.5:1) in both themes.
+ */
+
+:root {
+    color-scheme: light;
+    --bg: #fbf8ff;
+    --surface: #fff;
+    --surface-2: #f4effc;
+    --border: #e4dcf2;
+    --text: #2e2a3d;
+    --muted: #7a7290;
+    --accent: #8b7fd6;
+    --accent-text: #fff;
+    --accent-soft: #ece8fb;
+    --danger: #d9707f;
+    --danger-soft: #fde8ec;
+
+    --header: #efe9fb;
+    --tab-active: #fff;
+    --muted-text: #655d7c;
+    --accent-strong: #5f52b8;
+    --danger-text: #a83a4c;
+    --shadow: 0 8px 28px rgba(110, 90, 170, .16);
+
+    /* Application pastels: background / text */
+    --mint: #dff3ea;   --mint-text: #2f6b52;
+    --peach: #fde6d8;  --peach-text: #8a4a26;
+    --sky: #e3ecfd;    --sky-text: #2f4f8a;
+    --rose: #fbe3f0;   --rose-text: #86345e;
+    --butter: #fbf3d5; --butter-text: #7a6420;
+    --lilac: #ece6fb;  --lilac-text: #5b4a99;
+    --aqua: #dcf3f5;   --aqua-text: #245f66;
+    --sand: #f3ebdf;   --sand-text: #6b5434;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme=light]) {
+        color-scheme: dark;
+        --bg: #17151f;
+        --surface: #211e2c;
+        --surface-2: #2a2638;
+        --border: #3a3450;
+        --text: #ece8f6;
+        --muted: #a49cbc;
+        --accent: #b3a8f0;
+        --accent-text: #1d1a28;
+        --accent-soft: #332d4d;
+        --danger: #f0a0ab;
+        --danger-soft: #3d2530;
+
+        --header: #1d1a28;
+        --tab-active: #211e2c;
+        --muted-text: #a49cbc;
+        --accent-strong: #b3a8f0;
+        --danger-text: #f0a0ab;
+        --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+
+        --mint: #23392f;   --mint-text: #a8e2c6;
+        --peach: #3d2c22;  --peach-text: #f6c3a3;
+        --sky: #232f45;    --sky-text: #b3cbf7;
+        --rose: #3b2433;   --rose-text: #f3b4d4;
+        --butter: #373220; --butter-text: #efdc98;
+        --lilac: #2e2945;  --lilac-text: #cfc3f7;
+        --aqua: #1f3739;   --aqua-text: #a3e0e5;
+        --sand: #36302a;   --sand-text: #e6d3b8;
+    }
+
+    :root:not([data-theme=light]) .when-light { display: none; }
+    :root:not([data-theme=light]) .when-dark { display: inline; }
+}
+
+:root[data-theme=dark] {
+    color-scheme: dark;
+    --bg: #17151f;
+    --surface: #211e2c;
+    --surface-2: #2a2638;
+    --border: #3a3450;
+    --text: #ece8f6;
+    --muted: #a49cbc;
+    --accent: #b3a8f0;
+    --accent-text: #1d1a28;
+    --accent-soft: #332d4d;
+    --danger: #f0a0ab;
+    --danger-soft: #3d2530;
+
+    --header: #1d1a28;
+    --tab-active: #211e2c;
+    --muted-text: #a49cbc;
+    --accent-strong: #b3a8f0;
+    --danger-text: #f0a0ab;
+    --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+
+    --mint: #23392f;   --mint-text: #a8e2c6;
+    --peach: #3d2c22;  --peach-text: #f6c3a3;
+    --sky: #232f45;    --sky-text: #b3cbf7;
+    --rose: #3b2433;   --rose-text: #f3b4d4;
+    --butter: #373220; --butter-text: #efdc98;
+    --lilac: #2e2945;  --lilac-text: #cfc3f7;
+    --aqua: #1f3739;   --aqua-text: #a3e0e5;
+    --sand: #36302a;   --sand-text: #e6d3b8;
+}
+
+/* Theme toggle label: shows the theme a click switches to. */
+.when-dark { display: none; }
+:root[data-theme=dark] .when-light { display: none; }
+:root[data-theme=dark] .when-dark { display: inline; }
+
+/* Application colors, picked by ApplicationColors (application ID mod 8). */
+.app-0 { --app-bg: var(--mint);   --app-text: var(--mint-text); }
+.app-1 { --app-bg: var(--peach);  --app-text: var(--peach-text); }
+.app-2 { --app-bg: var(--sky);    --app-text: var(--sky-text); }
+.app-3 { --app-bg: var(--rose);   --app-text: var(--rose-text); }
+.app-4 { --app-bg: var(--butter); --app-text: var(--butter-text); }
+.app-5 { --app-bg: var(--lilac);  --app-text: var(--lilac-text); }
+.app-6 { --app-bg: var(--aqua);   --app-text: var(--aqua-text); }
+.app-7 { --app-bg: var(--sand);   --app-text: var(--sand-text); }
+
+/* Base */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html { background: var(--bg); }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+button { cursor: pointer; }
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.muted { color: var(--muted-text); }
+
+/* Header and tabs */
+
+.header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 12px 16px 0;
+    background: var(--header);
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 18px;
+    padding-bottom: 10px;
+    font-weight: 700;
+}
+
+.logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, var(--sky), var(--rose));
+    border: 1px solid var(--border);
+}
+
+.tabs { display: flex; gap: 6px; }
+
+.tab {
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 10px 10px 0 0;
+    color: var(--muted-text);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.tab:hover { color: var(--text); }
+
+.tab[aria-current=page] {
+    margin-bottom: -1px;
+    background: var(--tab-active);
+    border-color: var(--border);
+    border-bottom-color: var(--tab-active);
+    color: var(--text);
+    font-weight: 600;
+}
+
+.who {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    padding-bottom: 9px;
+    color: var(--muted-text);
+    font-size: 12px;
+}
+
+.badge {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-weight: 600;
+}
+
+.toggle {
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+}
+
+/* Tab content */
+
+.main { padding: 16px; }
+
+.bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.input {
+    width: 240px;
+    max-width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.input::placeholder { color: var(--muted-text); }
+
+/* Buttons */
+
+.btn {
+    padding: 7px 14px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent-strong);
+    color: var(--accent-text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.btn.ghost {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+.btn.danger {
+    background: var(--danger-soft);
+    color: var(--danger-text);
+}
+
+.link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent-strong);
+    font-weight: 600;
+    text-align: left;
+}
+
+.link:hover { text-decoration: underline; }
+
+/* Table */
+
+.card {
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.grid { width: 100%; border-collapse: collapse; }
+
+.grid thead th {
+    padding: 8px 12px;
+    background: var(--surface-2);
+    color: var(--muted-text);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.grid td, .grid tbody th {
+    padding: 9px 12px;
+    border-top: 1px solid var(--border);
+    font-weight: normal;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.grid .actions { text-align: right; }
+
+.grid .empty { text-align: center; }
+
+/* Applications and roles */
+
+.apptag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+}
+
+.dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--app-text);
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 1px 3px 1px 0;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--app-bg);
+    color: var(--app-text);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.chip-x {
+    padding: 0 2px;
+    border: none;
+    border-radius: 999px;
+    background: none;
+    color: inherit;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.chip-x:hover { background: var(--surface); }
+
+/* Dialogs */
+
+dialog {
+    width: min(440px, calc(100vw - 32px));
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+
+dialog::backdrop { background: rgba(23, 21, 31, .35); }
+
+dialog h2 { margin: 0 0 10px; font-size: 15px; }
+
+.warn {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--danger-soft);
+    color: var(--danger-text);
+    font-weight: 500;
+}
+
+.row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
