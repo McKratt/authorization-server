@@ -221,6 +221,20 @@ button { cursor: pointer; }
     font-size: 12px;
 }
 
+/* Standalone message pages: no access (403), sign-in cancelled. */
+.notice {
+    max-width: 560px;
+    margin: 48px auto;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+}
+
+.notice h1 { margin: 0 0 10px; font-size: 18px; }
+.notice p { margin: 0 0 18px; }
+
 .badge {
     padding: 2px 8px;
     border-radius: 999px;

@@ -12,12 +12,14 @@ import io.helidon.webserver.http.ServerResponse;
 import java.util.HashMap;
 import java.util.Map;
 import net.bakaar.authz.adapter.in.web.admin.auth.AdminAuthFilter;
+import net.bakaar.authz.adapter.in.web.admin.auth.AdminSession;
+import net.bakaar.authz.adapter.in.web.admin.auth.AuthPages;
 import net.bakaar.authz.application.domain.model.NotFoundException;
 
 /**
  * Renders the precompiled jte templates of the admin UI with the headers every admin page carries.
  */
-public final class AdminPages {
+public final class AdminPages implements AuthPages {
 
     static final String CONTENT_SECURITY_POLICY = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'";
 
@@ -82,6 +84,11 @@ public final class AdminPages {
                 .header(HX_TRIGGER, CHANGED_TRIGGER)
                 .header(HeaderNames.CACHE_CONTROL, "no-store")
                 .send();
+    }
+
+    @Override
+    public void forbidden(ServerRequest request, ServerResponse response, AdminSession session) {
+        render(request, response, Status.FORBIDDEN_403, "forbidden.jte", Map.of("session", session));
     }
 
     /**

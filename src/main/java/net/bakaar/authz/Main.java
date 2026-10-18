@@ -116,7 +116,7 @@ public final class Main {
                 applicationAdmin, applicationAdmin);
         // precompiled by jte-maven-plugin: rendering needs no Java compiler at runtime
         AdminPages pages = new AdminPages(TemplateEngine.createPrecompiled(ContentType.Html));
-        return routing -> routing.addFilter(new AdminAuthFilter(cookies))
+        return routing -> routing.addFilter(new AdminAuthFilter(cookies, pages))
                 .register("/admin/static", StaticContentFeature.createService(ClasspathHandlerConfig.builder()
                         .location("admin-static")
                         .build()))

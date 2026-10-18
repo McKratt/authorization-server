@@ -24,6 +24,8 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.bakaar.authz.Main;
 import net.bakaar.authz.support.AdminClient;
 import net.bakaar.authz.support.AdminClient.AdminCookies;
@@ -236,14 +238,56 @@ class AdminAuthTest {
 
         given().port(server.port()).redirects().follow(false)
                 .cookie(SESSION_COOKIE, session)
-                .when().get("/admin")
+                .header("HX-Request", "true")
+                .when().get("/admin/applications")
                 .then().statusCode(403)
                 .header("Cache-Control", "no-store");
         given().port(server.port()).redirects().follow(false)
                 .cookie(SESSION_COOKIE, session)
-                .header("HX-Request", "true")
-                .when().get("/admin/applications")
+                .header("X-CSRF-Token", forbiddenPageCsrf(session))
+                .when().post("/admin/users")
                 .then().statusCode(403);
+    }
+
+    @Test
+    void userWithoutAdminRolesSeesAForbiddenPageWithSignOut() {
+        String session = AdminClient.sessionCookie(server.port(), keycloak, "alice", "some-other-role");
+
+        Response page = given().port(server.port()).redirects().follow(false)
+                .cookie(SESSION_COOKIE, session)
+                .when().get("/admin");
+
+        page.then().statusCode(403)
+                .header("Cache-Control", "no-store")
+                .header("Content-Type", startsWith("text/html"))
+                .header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
+                .body(containsString("You do not have access to the admin UI"))
+                .body(containsString("alice"))
+                .body(containsString("hx-post=\"/admin/logout\""))
+                .body(containsString("<link rel=\"stylesheet\" href=\"/admin/static/admin.css\">"));
+        assertThat(page.asString()).doesNotContain("<script>", "style=", " onclick=");
+        String csrf = forbiddenPageCsrf(session);
+        assertThat(page.asString()).contains("hx-headers='{\"X-CSRF-Token\":\"" + csrf + "\"}'");
+    }
+
+    @Test
+    void userWithoutAdminRolesCanLogOut() {
+        String session = AdminClient.sessionCookie(server.port(), keycloak, "alice", "some-other-role");
+        String csrf = forbiddenPageCsrf(session);
+
+        given().port(server.port()).redirects().follow(false)
+                .cookie(SESSION_COOKIE, session)
+                .when().post("/admin/logout")
+                .then().statusCode(403);
+        Response response = given().port(server.port()).redirects().follow(false)
+                .cookie(SESSION_COOKIE, session)
+                .header("HX-Request", "true")
+                .header("X-CSRF-Token", csrf)
+                .when().post("/admin/logout");
+
+        response.then().statusCode(204);
+        assertThat(response.header("HX-Redirect")).startsWith(keycloak.baseUrl() + "/logout?");
+        assertThat(setCookie(response, SESSION_COOKIE)).startsWith(SESSION_COOKIE + "=;");
     }
 
     @Test
@@ -325,6 +369,17 @@ class AdminAuthTest {
         callback.then().statusCode(400);
         assertThat(callback.getHeaders().getValues("Set-Cookie"))
                 .noneMatch(cookie -> cookie.startsWith(SESSION_COOKIE + "="));
+    }
+
+    private String forbiddenPageCsrf(String session) {
+        String page = given().port(server.port()).redirects().follow(false)
+                .cookie(SESSION_COOKIE, session)
+                .when().get("/admin")
+                .then().statusCode(403)
+                .extract().asString();
+        Matcher matcher = Pattern.compile("<meta name=\"csrf-token\" content=\"([^\"]+)\">").matcher(page);
+        assertThat(matcher.find()).as("csrf-token meta on the 403 page").isTrue();
+        return matcher.group(1);
     }
 
     private static String setCookie(Response response, String name) {
