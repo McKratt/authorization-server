@@ -1,0 +1,669 @@
+openapi: 3.1.0
+info:
+  title: Authorization server
+  version: 0.1.0
+  description: |
+    Two surfaces:
+
+    * **Authorization API** (`/api/v1`): JSON, for client applications. The user is identified only by the
+      verified bearer token, never by a parameter.
+    * **Admin UI** (`/admin`): server-rendered HTML for htmx. Responses are HTML pages or fragments, not JSON.
+      A request with the `HX-Request` header gets a fragment; without it, the full page.
+
+    Design: `docs/superpowers/specs/2026-10-18-admin-ui-design.md`.
+
+    Conventions for the admin UI:
+
+    * IDs are TSIDs (64-bit), always sent and received as decimal strings.
+    * Every response carries `Cache-Control: no-store`.
+    * Reads need the `authz-admin` or `authz-reader` role; writes need `authz-admin` and a valid
+      `X-CSRF-Token` header.
+    * A user always holds at least one role. Any change that would leave users without a role deletes them in
+      the same transaction, but only if the request lists exactly those users in `confirmedUserIds`;
+      otherwise nothing changes and the server answers 409 with a fresh confirmation dialog.
+    * A successful dialog write answers 204 with `HX-Trigger: {"authz:changed":true,"authz:close-dialog":true}`;
+      the open tab reloads itself on `authz:changed`.
+
+servers:
+  - url: http://localhost:8080
+    description: docker compose
+
+tags:
+  - name: authorization
+    description: Authorization API for client applications
+  - name: admin-session
+    description: Admin UI sign-in through Keycloak (OIDC authorization code flow)
+  - name: admin-users
+    description: Users tab and user dialogs
+  - name: admin-applications
+    description: Applications tab and application dialogs
+
+paths:
+  /api/v1/authorizations:
+    get:
+      operationId: getAuthorization
+      tags: [authorization]
+      summary: Roles of the token's owner for one application
+      security:
+        - bearerJwt: []
+      parameters:
+        - name: application
+          in: query
+          required: true
+          description: Must appear exactly once.
+          schema:
+            $ref: '#/components/schemas/Name'
+      responses:
+        '200':
+          description: The user holds at least one role for the application.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Authorization' }
+        '400':
+          description: '`application` missing, repeated or invalid. Only reported once the token is valid.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: invalid_request }
+        '401':
+          description: Token missing, repeated, not Bearer, or untrusted.
+          headers:
+            WWW-Authenticate:
+              schema: { type: string }
+              example: Bearer error="invalid_token"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: No role for this user and application. Unknown users and unknown applications get the same answer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: not_found }
+
+  # ---------------------------------------------------------------- admin: session
+  /admin/login:
+    get:
+      operationId: startLogin
+      security: []
+      tags: [admin-session]
+      summary: Start sign-in
+      description: |
+        Sets a short-lived encrypted login cookie (state, nonce, PKCE verifier, return path) and redirects to
+        Keycloak's authorization endpoint. Requests to any `/admin` page without a session end up here.
+      parameters:
+        - name: returnTo
+          in: query
+          description: Local path under `/admin` to come back to. Anything else is replaced by `/admin`.
+          schema: { type: string, example: /admin/applications }
+      responses:
+        '302': { $ref: '#/components/responses/RedirectToKeycloak' }
+  /oidc/redirect:
+    get:
+      operationId: completeLogin
+      security: []
+      tags: [admin-session]
+      summary: Sign-in callback from Keycloak
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        '302':
+          description: Signed in. Sets the session cookie and redirects to the saved `returnTo`.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              example: AUTHZ_ADMIN_SESSION=…; Path=/; HttpOnly; Secure; SameSite=Lax
+            Location:
+              schema: { type: string }
+        '400':
+          description: Missing or mismatching state, missing login cookie, or a failed code exchange or ID token check.
+  /admin/logout:
+    post:
+      operationId: logout
+      tags: [admin-session]
+      summary: Sign out
+      security:
+        - adminSession: []
+          csrfToken: []
+      responses:
+        '204':
+          description: Session cookie cleared. `HX-Redirect` points to Keycloak's end-session endpoint.
+          headers:
+            HX-Redirect: { schema: { type: string } }
+
+  # ---------------------------------------------------------------- admin: users
+  /admin:
+    get:
+      operationId: usersTab
+      tags: [admin-users]
+      summary: Users tab (home)
+      description: One row per user and application, with the user's role chips.
+      security: [ { adminSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/HxRequest'
+      responses:
+        '200': { $ref: '#/components/responses/PageOrTab' }
+        '302': { $ref: '#/components/responses/RedirectToLogin' }
+        '401': { $ref: '#/components/responses/HtmxUnauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/users:
+    post:
+      operationId: createUser
+      tags: [admin-users]
+      summary: Create a user with at least one role of one application
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/CreateUserForm' }
+            encoding:
+              roleId: { explode: true }
+      responses:
+        '204': { $ref: '#/components/responses/Changed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/DialogConflict' }
+        '422': { $ref: '#/components/responses/DialogInvalid' }
+  /admin/users/new:
+    get:
+      operationId: newUserDialog
+      tags: [admin-users]
+      summary: New user dialog
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/users/{userId}:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    get:
+      operationId: userDialog
+      tags: [admin-users]
+      summary: User dialog (read-only for readers; rename and delete for admins)
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: renameUser
+      tags: [admin-users]
+      summary: Rename a user
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { $ref: '#/components/schemas/Username' }
+      responses:
+        '204': { $ref: '#/components/responses/Changed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DialogConflict' }
+        '422': { $ref: '#/components/responses/DialogInvalid' }
+    delete:
+      operationId: deleteUser
+      tags: [admin-users]
+      summary: Delete a user and all their grants
+      description: Deleting the user is the point of the action, so `confirmedUserIds` is not needed.
+      security: [ { adminSession: [], csrfToken: [] } ]
+      responses:
+        '204': { $ref: '#/components/responses/Changed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/users/{userId}/delete:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    get:
+      operationId: deleteUserConfirmation
+      tags: [admin-users]
+      summary: Confirmation dialog for deleting a user
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/users/{userId}/grants:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    post:
+      operationId: grantRoles
+      tags: [admin-users]
+      summary: Grant roles of one application to an existing user
+      description: Roles the user already holds are ignored.
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/GrantForm' }
+            encoding:
+              roleId: { explode: true }
+      responses:
+        '204': { $ref: '#/components/responses/Changed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/DialogInvalid' }
+  /admin/users/{userId}/grants/new:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    get:
+      operationId: grantDialog
+      tags: [admin-users]
+      summary: Grant dialog (new user dialog with the username fixed)
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/users/{userId}/grants/{roleId}:
+    parameters:
+      - { $ref: '#/components/parameters/UserId' }
+      - { $ref: '#/components/parameters/RoleId' }
+    delete:
+      operationId: revokeRole
+      tags: [admin-users]
+      summary: Revoke one role; deletes the user if it was their last
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/ConfirmationForm' }
+            encoding:
+              confirmedUserIds: { explode: true }
+      responses:
+        '204': { $ref: '#/components/responses/Changed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaleConfirmation' }
+  /admin/users/{userId}/grants/{roleId}/delete:
+    parameters:
+      - { $ref: '#/components/parameters/UserId' }
+      - { $ref: '#/components/parameters/RoleId' }
+    get:
+      operationId: revokeRoleConfirmation
+      tags: [admin-users]
+      summary: Confirmation dialog for revoking a role
+      description: Warns when the user would be deleted because it is their last role.
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------- admin: applications
+  /admin/applications:
+    get:
+      operationId: applicationsTab
+      tags: [admin-applications]
+      summary: Applications tab
+      security: [ { adminSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/HxRequest'
+      responses:
+        '200': { $ref: '#/components/responses/PageOrTab' }
+        '302': { $ref: '#/components/responses/RedirectToLogin' }
+        '401': { $ref: '#/components/responses/HtmxUnauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createApplication
+      tags: [admin-applications]
+      summary: Create an application with its initial roles
+      description: '`roleName` and `roleDescription` are parallel lists; zero roles is allowed.'
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/CreateApplicationForm' }
+            encoding:
+              roleName: { explode: true }
+              roleDescription: { explode: true }
+      responses:
+        '204': { $ref: '#/components/responses/Changed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/DialogConflict' }
+        '422': { $ref: '#/components/responses/DialogInvalid' }
+  /admin/applications/new:
+    get:
+      operationId: newApplicationDialog
+      tags: [admin-applications]
+      summary: Empty application dialog
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/applications/{appId}:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      operationId: applicationDialog
+      tags: [admin-applications]
+      summary: Application dialog, filled in (read-only for readers)
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateApplication
+      tags: [admin-applications]
+      summary: Update name, responsible and description
+      description: A rename changes what the authorization API matches; the dialog warns about it.
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/ApplicationForm' }
+      responses:
+        '204': { $ref: '#/components/responses/Changed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DialogConflict' }
+        '422': { $ref: '#/components/responses/DialogInvalid' }
+    delete:
+      operationId: deleteApplication
+      tags: [admin-applications]
+      summary: Delete an application with its roles and grants; deletes users left without roles
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/ConfirmationForm' }
+            encoding:
+              confirmedUserIds: { explode: true }
+      responses:
+        '204': { $ref: '#/components/responses/Changed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaleConfirmation' }
+  /admin/applications/{appId}/delete:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      operationId: deleteApplicationConfirmation
+      tags: [admin-applications]
+      summary: Confirmation dialog listing the users that would be deleted
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/applications/{appId}/role-options:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      operationId: roleOptions
+      tags: [admin-applications]
+      summary: Role checkboxes of one application (used by the new user and grant dialogs)
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Fragment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/applications/{appId}/roles:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    post:
+      operationId: addRole
+      tags: [admin-applications]
+      summary: Add a role
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/RoleForm' }
+      responses:
+        '200': { $ref: '#/components/responses/DialogChanged' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DialogConflict' }
+        '422': { $ref: '#/components/responses/DialogInvalid' }
+  /admin/applications/{appId}/roles/{roleId}:
+    parameters:
+      - { $ref: '#/components/parameters/ApplicationId' }
+      - { $ref: '#/components/parameters/RoleId' }
+    put:
+      operationId: updateRole
+      tags: [admin-applications]
+      summary: Update a role
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/RoleForm' }
+      responses:
+        '200': { $ref: '#/components/responses/DialogChanged' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/DialogConflict' }
+        '422': { $ref: '#/components/responses/DialogInvalid' }
+    delete:
+      operationId: deleteRole
+      tags: [admin-applications]
+      summary: Delete a role; deletes users left without roles
+      security: [ { adminSession: [], csrfToken: [] } ]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/ConfirmationForm' }
+            encoding:
+              confirmedUserIds: { explode: true }
+      responses:
+        '200': { $ref: '#/components/responses/DialogChanged' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaleConfirmation' }
+  /admin/applications/{appId}/roles/{roleId}/delete:
+    parameters:
+      - { $ref: '#/components/parameters/ApplicationId' }
+      - { $ref: '#/components/parameters/RoleId' }
+    get:
+      operationId: deleteRoleConfirmation
+      tags: [admin-applications]
+      summary: Confirmation dialog listing the users that would be deleted
+      security: [ { adminSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Dialog' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Asymmetrically signed JWT from the configured issuer; the username comes from `jwt.username-claim`.
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: AUTHZ_ADMIN_SESSION
+      description: Encrypted session cookie set by `/oidc/redirect`. Carries username, admin roles, CSRF token and expiry.
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Per-session token rendered in the page and sent by htmx on every non-GET request.
+
+  parameters:
+    HxRequest:
+      name: HX-Request
+      in: header
+      description: Present (`true`) on htmx requests; the response is then only the tab content.
+      schema: { type: string, enum: ['true'] }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Id' }
+    ApplicationId:
+      name: appId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Id' }
+    RoleId:
+      name: roleId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Id' }
+
+  headers:
+    NoStore:
+      schema: { type: string, const: no-store }
+    HxTrigger:
+      description: htmx events fired on the client.
+      schema: { type: string }
+      example: '{"authz:changed":true,"authz:close-dialog":true}'
+
+  responses:
+    PageOrTab:
+      description: Full HTML page, or only the tab content when `HX-Request` is present.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        text/html: { schema: { type: string } }
+    Fragment:
+      description: HTML fragment.
+      content:
+        text/html: { schema: { type: string } }
+    Dialog:
+      description: HTML `<dialog>` content, swapped into the dialog slot.
+      content:
+        text/html: { schema: { type: string } }
+    Changed:
+      description: Done. No body; the client closes the dialog and reloads the open tab.
+      headers:
+        HX-Trigger: { $ref: '#/components/headers/HxTrigger' }
+    DialogChanged:
+      description: Done inside the application dialog. Body is the refreshed dialog; the open tab reloads too.
+      headers:
+        HX-Trigger:
+          schema: { type: string }
+          example: '{"authz:changed":true}'
+      content:
+        text/html: { schema: { type: string } }
+    DialogInvalid:
+      description: Invalid input (bad name or email, no role ticked, a role of another application). The dialog is re-rendered with field messages.
+      content:
+        text/html: { schema: { type: string } }
+    DialogConflict:
+      description: Name already taken (username, application name, or role name within the application). The dialog is re-rendered with the message.
+      content:
+        text/html: { schema: { type: string } }
+    StaleConfirmation:
+      description: |
+        `confirmedUserIds` differs from the users this change would actually delete (data changed in between).
+        Nothing was changed; the body is a fresh confirmation dialog.
+      content:
+        text/html: { schema: { type: string } }
+    NotFound:
+      description: Unknown or malformed ID.
+    Forbidden:
+      description: Signed in without the needed role (readers on writes, users with neither admin role), or missing/invalid CSRF token.
+    RedirectToLogin:
+      description: No valid session on a normal browser request; redirects to `/admin/login?returnTo=…`.
+      headers:
+        Location: { schema: { type: string } }
+    HtmxUnauthenticated:
+      description: No valid session on an htmx request; `HX-Redirect` makes the browser do a full redirect to the login.
+      headers:
+        HX-Redirect: { schema: { type: string } }
+    RedirectToKeycloak:
+      description: Redirect to Keycloak's authorization endpoint (code flow with PKCE S256, state and nonce).
+      headers:
+        Location: { schema: { type: string } }
+        Set-Cookie:
+          schema: { type: string }
+          example: AUTHZ_ADMIN_LOGIN=…; Path=/oidc; HttpOnly; Secure; SameSite=Lax; Max-Age=600
+
+  schemas:
+    Id:
+      type: string
+      pattern: '^[0-9]{1,19}$'
+      description: TSID as a decimal string (exceeds JavaScript's safe integer range).
+      example: '681472354872345601'
+    Name:
+      type: string
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$'
+      description: Application or role name.
+    Username:
+      type: string
+      minLength: 1
+      maxLength: 255
+      description: Trimmed; must equal the `preferred_username` claim of the user's tokens.
+    Email:
+      type: string
+      format: email
+      maxLength: 254
+    Description:
+      type: string
+      maxLength: 2000
+      description: Optional; blank is stored as no description.
+    Authorization:
+      type: object
+      required: [username, application, roles]
+      properties:
+        username: { type: string }
+        application: { $ref: '#/components/schemas/Name' }
+        roles:
+          type: array
+          description: Sorted.
+          items: { $ref: '#/components/schemas/Name' }
+      example: { username: alice, application: billing, roles: [admin, viewer] }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    CreateUserForm:
+      type: object
+      required: [username, applicationId, roleId]
+      properties:
+        username: { $ref: '#/components/schemas/Username' }
+        applicationId: { $ref: '#/components/schemas/Id' }
+        roleId:
+          type: array
+          minItems: 1
+          description: Roles of `applicationId`, repeated field.
+          items: { $ref: '#/components/schemas/Id' }
+    GrantForm:
+      type: object
+      required: [applicationId, roleId]
+      properties:
+        applicationId: { $ref: '#/components/schemas/Id' }
+        roleId:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/Id' }
+    ApplicationForm:
+      type: object
+      required: [name, responsible]
+      properties:
+        name: { $ref: '#/components/schemas/Name' }
+        responsible: { $ref: '#/components/schemas/Email' }
+        description: { $ref: '#/components/schemas/Description' }
+    CreateApplicationForm:
+      allOf:
+        - $ref: '#/components/schemas/ApplicationForm'
+        - type: object
+          properties:
+            roleName:
+              type: array
+              items: { $ref: '#/components/schemas/Name' }
+            roleDescription:
+              type: array
+              description: Same length and order as `roleName`.
+              items: { $ref: '#/components/schemas/Description' }
+    RoleForm:
+      type: object
+      required: [name]
+      properties:
+        name: { $ref: '#/components/schemas/Name' }
+        description: { $ref: '#/components/schemas/Description' }
+    ConfirmationForm:
+      type: object
+      properties:
+        confirmedUserIds:
+          type: array
+          description: Users the admin agreed to delete, as shown in the confirmation dialog. Empty when nobody is removed.
+          items: { $ref: '#/components/schemas/Id' }
