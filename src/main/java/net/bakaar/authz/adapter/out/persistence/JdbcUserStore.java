@@ -1,5 +1,6 @@
 package net.bakaar.authz.adapter.out.persistence;
 
+import java.sql.Array;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -90,14 +91,27 @@ public class JdbcUserStore implements UserStore {
             return List.of();
         }
         Connection connection = transactions.current();
+        Array ids;
+        try {
+            ids = connection.createArrayOf("bigint", candidates.stream().map(UserId::value).toArray(Long[]::new));
+            // A concurrent grant holds a FOR KEY SHARE lock on the user row; waiting for it here means the DELETE
+            // below runs with a fresh snapshot that sees the committed grant (READ COMMITTED does not re-check
+            // NOT EXISTS for a row that was merely locked).
+            try (PreparedStatement lock = connection.prepareStatement(
+                    "SELECT id FROM app_user WHERE id = ANY(?) ORDER BY id FOR UPDATE")) {
+                lock.setArray(1, ids);
+                lock.execute();
+            }
+        } catch (SQLException e) {
+            throw new PersistenceException("Failed to lock users before deletion", e);
+        }
         try (PreparedStatement statement = connection.prepareStatement("""
                 DELETE FROM app_user u
                 WHERE u.id = ANY(?)
                   AND NOT EXISTS (SELECT 1 FROM user_role WHERE user_id = u.id)
                 RETURNING u.id, u.username
                 """)) {
-            statement.setArray(1, connection.createArrayOf("bigint",
-                    candidates.stream().map(UserId::value).toArray(Long[]::new)));
+            statement.setArray(1, ids);
             try (ResultSet rs = statement.executeQuery()) {
                 List<UserSummary> deleted = new ArrayList<>();
                 while (rs.next()) {
