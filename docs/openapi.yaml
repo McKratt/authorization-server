@@ -96,7 +96,9 @@ paths:
       parameters:
         - name: returnTo
           in: query
-          description: Local path under `/admin` to come back to. Anything else is replaced by `/admin`.
+          description: |
+            Local path under `/admin` to come back to. Anything else (other origins, `//`, `..`, backslashes, any `%`,
+            control characters) is replaced by `/admin`.
           schema: { type: string, example: /admin/applications }
       responses:
         '302': { $ref: '#/components/responses/RedirectToKeycloak' }
@@ -582,7 +584,10 @@ components:
       headers:
         Location: { schema: { type: string } }
     HtmxUnauthenticated:
-      description: No valid session on an htmx request; `HX-Redirect` makes the browser do a full redirect to the login.
+      description: |
+        No valid session on an htmx request; `HX-Redirect` makes the browser do a full redirect to
+        `/admin/login?returnTo=…`, where `returnTo` is the path of the page that sent the request (`HX-Current-URL`),
+        not the fragment requested, or `/admin` when that header is missing or unusable.
       headers:
         HX-Redirect: { schema: { type: string } }
     RedirectToKeycloak:

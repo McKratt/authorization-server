@@ -118,12 +118,14 @@ public final class LoginRoutes implements HttpService {
 
     /**
      * Only local paths under {@code /admin} are kept; anything else (other origins, {@code //host}, traversal,
-     * control characters) becomes {@code /admin}, so the callback can never redirect off the admin UI.
+     * any percent-encoding such as {@code %2e%2e}, control characters) becomes {@code /admin}, so the callback can
+     * never redirect off the admin UI.
      */
     static String safeReturnTo(Optional<String> returnTo) {
         return returnTo
                 .filter(path -> path.equals(HOME) || path.startsWith(HOME + "/"))
-                .filter(path -> !path.contains("//") && !path.contains("\\") && !path.contains("/.."))
+                .filter(path -> !path.contains("//") && !path.contains("\\") && !path.contains("/..")
+                        && !path.contains("%"))
                 .filter(path -> path.chars().allMatch(c -> c > 0x20 && c < 0x7f))
                 .orElse(HOME);
     }

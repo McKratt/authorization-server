@@ -10,6 +10,8 @@ import io.helidon.webserver.http.RoutingRequest;
 import io.helidon.webserver.http.RoutingResponse;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,7 +23,8 @@ import java.util.Optional;
  * {@code /admin} (the API, {@code /oidc/redirect}, health) passes through untouched.
  * <ol>
  *     <li>No valid session: htmx requests get 401 with {@code HX-Redirect}, others a 302, both to
- *     {@code /admin/login?returnTo=<path>}.</li>
+ *     {@code /admin/login?returnTo=<path>}. For htmx the path is that of the page ({@code HX-Current-URL}), not
+ *     of the fragment requested, so the user does not land on a bare dialog after signing in again.</li>
  *     <li>Neither admin role: 403, as a page with a sign-out button for a normal GET, empty otherwise. Only
  *     {@code POST /admin/logout} (with the CSRF token) gets through, so the user can switch accounts.</li>
  *     <li>Any method but GET without an {@code X-CSRF-Token} equal to the session's: 403.</li>
@@ -33,6 +36,7 @@ public final class AdminAuthFilter implements Filter {
 
     static final HeaderName HX_REQUEST = HeaderNames.create("HX-Request");
     static final HeaderName HX_REDIRECT = HeaderNames.create("HX-Redirect");
+    static final HeaderName HX_CURRENT_URL = HeaderNames.create("HX-Current-URL");
     static final HeaderName CSRF_TOKEN = HeaderNames.create("X-CSRF-Token");
     static final String LOGOUT_PATH = "/admin/logout";
 
@@ -102,11 +106,26 @@ public final class AdminAuthFilter implements Filter {
     }
 
     private static void redirectToLogin(ServerRequest request, ServerResponse response, String path) {
-        String login = "/admin/login?returnTo=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+        Optional<String> returnTo = isHtmx(request) ? currentPagePath(request) : Optional.of(path);
+        String login = "/admin/login?returnTo="
+                + URLEncoder.encode(LoginRoutes.safeReturnTo(returnTo), StandardCharsets.UTF_8);
         if (isHtmx(request)) {
             response.header(HX_REDIRECT, login).status(Status.UNAUTHORIZED_401).send();
         } else {
             response.header(HeaderNames.LOCATION, login).status(Status.FOUND_302).send();
+        }
+    }
+
+    /** Raw path of the page an htmx request came from; empty when the header is missing, repeated or no URI. */
+    private static Optional<String> currentPagePath(ServerRequest request) {
+        List<String> values = request.headers().all(HX_CURRENT_URL, List::of);
+        if (values.size() != 1) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(new URI(values.getFirst()).getRawPath());
+        } catch (URISyntaxException e) {
+            return Optional.empty();
         }
     }
 
