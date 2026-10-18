@@ -4,11 +4,16 @@ import static io.restassured.RestAssured.given;
 import static net.bakaar.authz.support.AdminClient.SESSION_COOKIE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.emptyString;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.startsWith;
 
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
+import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
+import java.io.OutputStream;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -16,6 +21,7 @@ import java.sql.PreparedStatement;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 import net.bakaar.authz.Main;
 import net.bakaar.authz.common.Ids;
 import net.bakaar.authz.support.AdminClient;
@@ -67,7 +73,18 @@ class UsersTabTest {
                 "alice", "bob", "billing", "crm", "viewer",
                 "<meta name=\"csrf-token\" content=\"" + reader.csrf() + "\">",
                 "hx-headers='{\"X-CSRF-Token\":\"" + reader.csrf() + "\"}'",
-                "/admin/static/admin.css", "/admin/static/admin.js", "/admin/static/htmx.min.js");
+                "/admin/static/admin.css", "/admin/static/admin.js", "/admin/static/htmx.min.js",
+                "\"historyCacheSize\":0", "\"refreshOnHistoryMiss\":true")
+                .doesNotContain("hx-swap-oob");
+    }
+
+    @Test
+    void fullPageHasNoInlineScriptsOrStyles() {
+        String body = as(admin).when().get("/admin").then().statusCode(200).extract().asString();
+
+        assertThat(body).doesNotContain("<style", " style=", " onclick=");
+        assertThat(Pattern.compile("<script(?![^>]*\\ssrc=)[^>]*>").matcher(body).find())
+                .as("inline <script> without src").isFalse();
     }
 
     @Test
@@ -77,7 +94,8 @@ class UsersTabTest {
                 .then().statusCode(200)
                 .extract().asString();
 
-        assertThat(body).doesNotContain("<html", "id=\"dialog-slot\"").contains("id=\"tab-content\"", "alice");
+        assertThat(body).doesNotContain("<html", "id=\"dialog-slot\"")
+                .contains("id=\"tab-content\"", "alice", "hx-swap-oob=\"true\"");
     }
 
     @Test
@@ -122,7 +140,7 @@ class UsersTabTest {
         as(reader).when().get("/admin")
                 .then().statusCode(200)
                 .header("Cache-Control", "no-store")
-                .header("Content-Security-Policy", startsWith("default-src 'self'"));
+                .header("Content-Security-Policy", equalTo(AdminPages.CONTENT_SECURITY_POLICY));
     }
 
     @Test
@@ -131,6 +149,36 @@ class UsersTabTest {
             given().port(server.port()).redirects().follow(false)
                     .when().get("/admin/static/" + asset)
                     .then().statusCode(200);
+        }
+        given().port(server.port()).when().get("/admin/static/admin.css")
+                .then().statusCode(200).contentType(startsWith("text/css"));
+    }
+
+    @Test
+    void staticPathTraversalDoesNotServeTheConfiguration() {
+        for (String path : new String[] {"/admin/static/../application.yaml", "/admin/static/%2e%2e/application.yaml"}) {
+            Response response = as(admin).urlEncodingEnabled(false).when().get(path);
+
+            assertThat(response.statusCode() != 200 || !response.asString().contains("jwt:"))
+                    .as("%s answered %d with the configuration", path, response.statusCode()).isTrue();
+        }
+    }
+
+    /**
+     * Helidon answers a {@code RequestException} itself (status of the exception, empty body) without calling
+     * routing error handlers, so the catch-all 500 never sees it.
+     */
+    @Test
+    void malformedRequestIs400NotA500() throws Exception {
+        try (Socket socket = new Socket("localhost", server.port())) {
+            socket.setSoTimeout(5000);
+            OutputStream out = socket.getOutputStream();
+            out.write(("GET /admin?x=%zz HTTP/1.1\r\nHost: localhost\r\nCookie: " + SESSION_COOKIE + "="
+                    + admin.session() + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+            String response = new String(socket.getInputStream().readAllBytes(), StandardCharsets.US_ASCII);
+
+            assertThat(response).startsWith("HTTP/1.1 400").contains("Content-Length: 0");
         }
     }
 

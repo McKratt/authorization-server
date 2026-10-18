@@ -70,6 +70,14 @@ class SessionCodecTest {
     }
 
     @Test
+    void csrfTokenMustBeBase64Url() {
+        for (String token : new String[] {"", "a\"b", "a b", "a+b/c=", "<x>"}) {
+            assertThatThrownBy(() -> new AdminSession("a", Set.of(AdminRole.ADMIN), token, IN_ONE_HOUR))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
     void adminRoleMayWriteAndReaderMayNot() {
         assertThat(new AdminSession("a", Set.of(AdminRole.ADMIN), "c", IN_ONE_HOUR).canWrite()).isTrue();
         assertThat(new AdminSession("a", Set.of(AdminRole.READER), "c", IN_ONE_HOUR).canWrite()).isFalse();

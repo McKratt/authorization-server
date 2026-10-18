@@ -21,7 +21,7 @@
     </thead>
     @if(users.isEmpty())
         <tbody>
-        <tr><td class="empty muted" colspan="4">No users yet.</td></tr>
+        <tr><td class="empty muted" colspan="${session.canWrite() ? 4 : 3}">No users yet.</td></tr>
         </tbody>
     @endif
     @for(UserAccess user : users)
