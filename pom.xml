@@ -27,6 +27,7 @@
         <version.lib.flyway>13.10.3</version.lib.flyway>
         <version.lib.testcontainers>2.0.5</version.lib.testcontainers>
         <version.lib.nimbus-jose-jwt>10.10</version.lib.nimbus-jose-jwt>
+        <version.lib.tsid>2.1.4</version.lib.tsid>
     </properties>
 
     <dependencies>
@@ -55,6 +56,11 @@
             <groupId>com.nimbusds</groupId>
             <artifactId>nimbus-jose-jwt</artifactId>
             <version>${version.lib.nimbus-jose-jwt}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.hypersistence</groupId>
+            <artifactId>hypersistence-tsid</artifactId>
+            <version>${version.lib.tsid}</version>
         </dependency>
         <dependency>
             <groupId>com.zaxxer</groupId>
