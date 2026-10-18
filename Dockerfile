@@ -20,7 +20,7 @@ RUN modules="$(jdeps --ignore-missing-deps --print-module-deps --multi-release 2
 # --- Stage 2: Leyden AOT training run (JEP 483/514/515) ---
 # Must run on the exact same JRE and class path as the final image: the AOT cache
 # is only accepted when the JVM build and the jar paths/timestamps match.
-FROM alpine:3.23 AS aot
+FROM alpine:3.24 AS aot
 ENV JAVA_HOME=/opt/jre PATH=/opt/jre/bin:$PATH
 COPY --from=jre /opt/jre /opt/jre
 WORKDIR /app
@@ -51,7 +51,7 @@ test -s app.aot
 EOF
 
 # --- Stage 3: runtime image ---
-FROM alpine:3.23
+FROM alpine:3.24
 ENV JAVA_HOME=/opt/jre PATH=/opt/jre/bin:$PATH
 RUN addgroup -S app && adduser -S -G app app
 COPY --from=aot /opt/jre /opt/jre
