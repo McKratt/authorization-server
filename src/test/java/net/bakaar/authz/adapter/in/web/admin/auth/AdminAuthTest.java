@@ -29,29 +29,33 @@ import net.bakaar.authz.support.AdminClient;
 import net.bakaar.authz.support.AdminClient.AdminCookies;
 import net.bakaar.authz.support.AdminClient.LoginStart;
 import net.bakaar.authz.support.FakeKeycloak;
+import net.bakaar.authz.support.TestDatabase;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * End to end: real server, {@link FakeKeycloak} as identity provider. No database is needed: the server starts
- * without one, and the sign-in flow never touches it.
+ * End to end: real server, real PostgreSQL, {@link FakeKeycloak} as identity provider. The sign-in flow never
+ * touches the database, but the users tab it lands on does.
  */
 class AdminAuthTest {
 
+    private static TestDatabase database;
     private static FakeKeycloak keycloak;
     private static Main.RunningServer server;
 
     @BeforeAll
     static void setUp() {
+        database = new TestDatabase();
         keycloak = new FakeKeycloak();
-        server = Main.start(config(keycloak.baseUrl()));
+        server = Main.start(config(keycloak.baseUrl(), database));
     }
 
     @AfterAll
     static void tearDown() {
         server.close();
         keycloak.close();
+        database.close();
     }
 
     @Test
@@ -291,7 +295,7 @@ class AdminAuthTest {
         try (ServerSocket socket = new ServerSocket(0)) {
             closedPort = socket.getLocalPort();
         }
-        try (Main.RunningServer offline = Main.start(config("http://localhost:" + closedPort))) {
+        try (Main.RunningServer offline = Main.start(config("http://localhost:" + closedPort, null))) {
             given().port(offline.port()).redirects().follow(false)
                     .when().get("/admin")
                     .then().statusCode(302)
@@ -330,15 +334,22 @@ class AdminAuthTest {
         }
     }
 
-    private static Config config(String keycloakBaseUrl) {
+    /**
+     * Without a database, the server starts against an unreachable one, as it does during the AOT training run.
+     */
+    private static Config config(String keycloakBaseUrl, TestDatabase database) {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
-        Map<String, String> values = new HashMap<>(Map.of(
+        Map<String, String> values = new HashMap<>(database == null
+                ? Map.of("db.url", "jdbc:postgresql://localhost:1/unreachable",
+                        "db.username", "nobody",
+                        "db.password", "nobody",
+                        "db.migrate", "false")
+                : Map.of("db.url", database.jdbcUrl(),
+                        "db.username", database.username(),
+                        "db.password", database.password()));
+        values.putAll(Map.of(
                 "server.port", "0",
-                "db.url", "jdbc:postgresql://localhost:1/unreachable",
-                "db.username", "nobody",
-                "db.password", "nobody",
-                "db.migrate", "false",
                 "jwt.issuer", FakeKeycloak.ISSUER,
                 "jwt.jwks-uri", keycloakBaseUrl + "/jwks",
                 "jwt.audiences", "authz-server",

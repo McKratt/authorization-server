@@ -28,6 +28,7 @@
         <version.lib.testcontainers>2.0.5</version.lib.testcontainers>
         <version.lib.nimbus-jose-jwt>10.10</version.lib.nimbus-jose-jwt>
         <version.lib.tsid>2.1.4</version.lib.tsid>
+        <version.lib.jte>3.2.4</version.lib.jte>
     </properties>
 
     <dependencies>
@@ -38,6 +39,10 @@
         <dependency>
             <groupId>io.helidon.webserver.observe</groupId>
             <artifactId>helidon-webserver-observe-health</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.webserver</groupId>
+            <artifactId>helidon-webserver-static-content</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.config</groupId>
@@ -56,6 +61,12 @@
             <groupId>com.nimbusds</groupId>
             <artifactId>nimbus-jose-jwt</artifactId>
             <version>${version.lib.nimbus-jose-jwt}</version>
+        </dependency>
+        <dependency>
+            <!-- Templates are precompiled by jte-maven-plugin: only the runtime, without the template compiler. -->
+            <groupId>gg.jte</groupId>
+            <artifactId>jte-runtime</artifactId>
+            <version>${version.lib.jte}</version>
         </dependency>
         <dependency>
             <groupId>io.hypersistence</groupId>
@@ -117,6 +128,24 @@
 
     <build>
         <plugins>
+            <plugin>
+                <!-- Precompiles src/main/jte into Java sources: the jlinked runtime has no Java compiler. -->
+                <groupId>gg.jte</groupId>
+                <artifactId>jte-maven-plugin</artifactId>
+                <version>${version.lib.jte}</version>
+                <configuration>
+                    <sourceDirectory>${project.basedir}/src/main/jte</sourceDirectory>
+                    <contentType>Html</contentType>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
