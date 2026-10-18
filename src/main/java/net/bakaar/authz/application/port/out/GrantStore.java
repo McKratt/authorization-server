@@ -16,4 +16,10 @@ public interface GrantStore {
 
     /** Users (optionally only one) whose every role is among {@code removed}, i.e. who would be left without grant. */
     List<UserSummary> usersLosingAllRoles(Set<RoleId> removed, Optional<UserId> onlyUser);
+
+    /**
+     * Locks, in id order, every user holding one of {@code roles}, so a concurrent change to their grants
+     * waits until this transaction ends. Call before {@link #usersLosingAllRoles}.
+     */
+    void lockUsersHolding(Set<RoleId> roles);
 }

@@ -2,13 +2,20 @@ package net.bakaar.authz.application.domain.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.zaxxer.hikari.HikariDataSource;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import net.bakaar.authz.adapter.out.persistence.Database;
 import net.bakaar.authz.adapter.out.persistence.JdbcApplicationStore;
 import net.bakaar.authz.adapter.out.persistence.JdbcGrantStore;
@@ -31,9 +38,11 @@ import net.bakaar.authz.application.domain.model.UserId;
 import net.bakaar.authz.application.domain.model.UserSummary;
 import net.bakaar.authz.application.domain.model.Username;
 import net.bakaar.authz.application.port.in.CreateApplicationCommand;
+import net.bakaar.authz.application.port.in.UpdateApplicationCommand;
 import net.bakaar.authz.support.TestDatabase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Test;
 
 class ApplicationAdminServiceTest {
@@ -78,8 +87,8 @@ class ApplicationAdminServiceTest {
         assertThat(details.description()).isEqualTo(new Description("Knowledge base"));
         assertThat(details.roles()).extracting(RoleDetails::name, RoleDetails::userCount)
                 .containsExactlyInAnyOrder(
-                        org.assertj.core.groups.Tuple.tuple(new RoleName("editor"), 0),
-                        org.assertj.core.groups.Tuple.tuple(new RoleName("reader"), 0));
+                        tuple(new RoleName("editor"), 0),
+                        tuple(new RoleName("reader"), 0));
     }
 
     @Test
@@ -186,7 +195,7 @@ class ApplicationAdminServiceTest {
     @Test
     void updatesApplicationAndRole() {
         ApplicationId crm = application("crm");
-        service.updateApplication(new net.bakaar.authz.application.port.in.UpdateApplicationCommand(
+        service.updateApplication(new UpdateApplicationCommand(
                 crm, new ApplicationName("crm2"), new Email("c@bakaar.net"), new Description("d")));
         RoleId added = service.addRole(crm, newRole("auditor"));
         service.updateRole(crm, added, new NewRole(new RoleName("auditor2"), new Description("x")));
@@ -194,6 +203,90 @@ class ApplicationAdminServiceTest {
         ApplicationDetails details = service.getApplication(crm);
         assertThat(details.name()).isEqualTo(new ApplicationName("crm2"));
         assertThat(details.roles()).extracting(r -> r.name().value()).contains("auditor2");
+    }
+
+    @Test
+    @Timeout(60)
+    void concurrentRevokeOfAnotherGrantIsNotLostByDeleteApplication() throws Exception {
+        ApplicationId crm = application("crm");
+        UserId alice = user("alice");
+        UserId bob = user("bob");
+        try (Connection revoker = DriverManager.getConnection(
+                database.jdbcUrl(), database.username(), database.password())) {
+            revoker.setAutoCommit(false);
+            try (PreparedStatement lock = revoker.prepareStatement("SELECT id FROM app_user WHERE id = ? FOR UPDATE");
+                 PreparedStatement revoke = revoker.prepareStatement(
+                         "DELETE FROM user_role WHERE user_id = ? AND role_id IN (?, ?)")) {
+                lock.setLong(1, alice.value());
+                lock.execute();
+                revoke.setLong(1, alice.value());
+                revoke.setLong(2, role("billing/admin").value());
+                revoke.setLong(3, role("billing/viewer").value());
+                revoke.executeUpdate();
+                // alice now only holds crm/viewer, uncommitted
+
+                CompletableFuture<Void> deletion = CompletableFuture.runAsync(
+                        () -> service.deleteApplication(crm, Set.of(bob)));
+                awaitBlockedOnLock();
+                assertThat(deletion).isNotDone();
+                revoker.commit();
+
+                assertThatThrownBy(() -> deletion.get(30, TimeUnit.SECONDS))
+                        .hasCauseInstanceOf(UnconfirmedRemovalException.class)
+                        .cause().isInstanceOfSatisfying(UnconfirmedRemovalException.class, e ->
+                                assertThat(e.wouldRemove()).extracting(UserSummary::username)
+                                        .containsExactlyInAnyOrder(new Username("alice"), new Username("bob")));
+            }
+        }
+        assertThat(service.listApplications()).extracting(a -> a.name().value()).contains("crm");
+        assertThat(exists(alice)).isTrue();
+        assertThat(exists(bob)).isTrue();
+    }
+
+    @Test
+    void duplicateNamesOnUpdateAreConflicts() {
+        ApplicationId crm = application("crm");
+        ApplicationId billing = application("billing");
+
+        assertThatThrownBy(() -> service.updateApplication(new UpdateApplicationCommand(
+                crm, new ApplicationName("billing"), new Email("c@bakaar.net"), Description.EMPTY)))
+                .isInstanceOfSatisfying(NameConflictException.class, e -> assertThat(e.field()).isEqualTo("name"));
+        assertThatThrownBy(() -> service.addRole(billing, newRole("admin")))
+                .isInstanceOfSatisfying(NameConflictException.class, e ->
+                        assertThat(e.field()).isEqualTo("roleName"));
+        assertThatThrownBy(() -> service.updateRole(billing, role("billing/viewer"), newRole("admin")))
+                .isInstanceOfSatisfying(NameConflictException.class, e ->
+                        assertThat(e.field()).isEqualTo("roleName"));
+    }
+
+    @Test
+    void failedCreateLeavesNoRolesBehind() {
+        var command = new CreateApplicationCommand(new ApplicationName("billing"), new Email("x@bakaar.net"),
+                Description.EMPTY, List.of(newRole("ghost")));
+
+        assertThatThrownBy(() -> service.createApplication(command)).isInstanceOf(NameConflictException.class);
+
+        assertThat(service.listApplications()).flatExtracting(a -> a.roles())
+                .extracting(r -> r.name().value()).doesNotContain("ghost");
+    }
+
+    private void awaitBlockedOnLock() throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        try (Connection monitor = DriverManager.getConnection(
+                database.jdbcUrl(), database.username(), database.password());
+             PreparedStatement query = monitor.prepareStatement("SELECT count(*) FROM pg_stat_activity"
+                     + " WHERE wait_event_type = 'Lock' AND datname = current_database()")) {
+            while (System.nanoTime() < deadline) {
+                try (ResultSet rs = query.executeQuery()) {
+                    rs.next();
+                    if (rs.getInt(1) > 0) {
+                        return;
+                    }
+                }
+                Thread.sleep(50);
+            }
+        }
+        throw new AssertionError("deletion never blocked on the lock");
     }
 
     private boolean exists(UserId id) {

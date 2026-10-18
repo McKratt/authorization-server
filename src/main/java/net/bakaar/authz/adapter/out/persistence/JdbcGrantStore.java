@@ -83,4 +83,23 @@ public class JdbcGrantStore implements GrantStore {
             throw new PersistenceException("Failed to compute users losing all roles", e);
         }
     }
+
+    @Override
+    public void lockUsersHolding(Set<RoleId> roles) {
+        if (roles.isEmpty()) {
+            return;
+        }
+        Connection connection = transactions.current();
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT u.id FROM app_user u
+                WHERE EXISTS (SELECT 1 FROM user_role ur WHERE ur.user_id = u.id AND ur.role_id = ANY(?))
+                ORDER BY u.id FOR UPDATE
+                """)) {
+            statement.setArray(1, connection.createArrayOf("bigint",
+                    roles.stream().map(RoleId::value).toArray(Long[]::new)));
+            statement.execute();
+        } catch (SQLException e) {
+            throw new PersistenceException("Failed to lock users holding roles", e);
+        }
+    }
 }
