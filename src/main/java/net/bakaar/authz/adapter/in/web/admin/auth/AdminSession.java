@@ -1,0 +1,36 @@
+package net.bakaar.authz.adapter.in.web.admin.auth;
+
+import java.time.Instant;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * A signed-in admin UI user, carried in the encrypted {@code AUTHZ_ADMIN_SESSION} cookie.
+ *
+ * @param username  {@code preferred_username} of the ID token
+ * @param roles     admin roles held at sign-in; empty means the UI refuses every request
+ * @param csrfToken per-session token every non-GET request must echo in {@code X-CSRF-Token}
+ * @param expiresAt end of the session
+ */
+public record AdminSession(String username, Set<AdminRole> roles, String csrfToken, Instant expiresAt) {
+
+    public AdminSession {
+        Objects.requireNonNull(username, "username");
+        Objects.requireNonNull(csrfToken, "csrfToken");
+        Objects.requireNonNull(expiresAt, "expiresAt");
+        roles = Set.copyOf(roles);
+    }
+
+    public boolean canRead() {
+        return !roles.isEmpty();
+    }
+
+    public boolean canWrite() {
+        return roles.contains(AdminRole.ADMIN);
+    }
+
+    @Override
+    public String toString() {
+        return "AdminSession[username=" + username + ", roles=" + roles + ", expiresAt=" + expiresAt + "]";
+    }
+}
