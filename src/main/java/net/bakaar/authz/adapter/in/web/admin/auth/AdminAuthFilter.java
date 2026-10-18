@@ -22,7 +22,8 @@ import java.util.Optional;
  * <ol>
  *     <li>No valid session: htmx requests get 401 with {@code HX-Redirect}, others a 302, both to
  *     {@code /admin/login?returnTo=<path>}.</li>
- *     <li>Neither admin role: 403.</li>
+ *     <li>Neither admin role: 403, as a page with a sign-out button for a normal GET, empty otherwise. Only
+ *     {@code POST /admin/logout} (with the CSRF token) gets through, so the user can switch accounts.</li>
  *     <li>Any method but GET without an {@code X-CSRF-Token} equal to the session's: 403.</li>
  *     <li>Any method but GET without {@code authz-admin}: 403, except {@code POST /admin/logout}.</li>
  * </ol>
@@ -36,9 +37,11 @@ public final class AdminAuthFilter implements Filter {
     static final String LOGOUT_PATH = "/admin/logout";
 
     private final SessionCookies cookies;
+    private final AuthPages pages;
 
-    public AdminAuthFilter(SessionCookies cookies) {
+    public AdminAuthFilter(SessionCookies cookies, AuthPages pages) {
         this.cookies = cookies;
+        this.pages = pages;
     }
 
     /**
@@ -64,13 +67,17 @@ public final class AdminAuthFilter implements Filter {
             return;
         }
         AdminSession session = found.get();
-        if (!session.canRead()) {
-            forbidden(response);
+        Method method = request.prologue().method();
+        boolean logout = Method.POST.equals(method) && LOGOUT_PATH.equals(path);
+        if (!session.canRead() && !logout) {
+            if (Method.GET.equals(method) && !isHtmx(request)) {
+                pages.forbidden(request, response, session);
+            } else {
+                forbidden(response);
+            }
             return;
         }
-        Method method = request.prologue().method();
         if (!Method.GET.equals(method)) {
-            boolean logout = Method.POST.equals(method) && LOGOUT_PATH.equals(path);
             if (!hasCsrfToken(request, session) || !(session.canWrite() || logout)) {
                 forbidden(response);
                 return;

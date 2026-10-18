@@ -131,6 +131,7 @@ paths:
       operationId: logout
       tags: [admin-session]
       summary: Sign out
+      description: Allowed for every signed-in user, including users with neither admin role. Requires the CSRF token.
       security:
         - adminSession: []
           csrfToken: []
@@ -568,7 +569,14 @@ components:
     NotFound:
       description: Unknown or malformed ID.
     Forbidden:
-      description: Signed in without the needed role (readers on writes, users with neither admin role), or missing/invalid CSRF token.
+      description: |
+        Signed in without the needed role (readers on writes, users with neither admin role), or missing/invalid CSRF
+        token. Empty body, except for a normal (non-htmx) GET by a user with neither admin role: an HTML page naming
+        the user, saying they have no access, with a Sign out button (`POST /admin/logout`).
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        text/html: { schema: { type: string } }
     RedirectToLogin:
       description: No valid session on a normal browser request; redirects to `/admin/login?returnTo=…`.
       headers:

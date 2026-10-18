@@ -6,14 +6,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="csrf-token" content="${session.csrfToken()}">
-<meta name="htmx-config" content='{"includeIndicatorStyles":false,"historyCacheSize":0,"refreshOnHistoryMiss":true,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"(409|422)","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
-<title>Authorizations</title>
-<link rel="stylesheet" href="/admin/static/admin.css">
-<script src="/admin/static/admin.js"></script>
-<script src="/admin/static/htmx.min.js" defer></script>
+@template.head(csrfToken = session.csrfToken())
 </head>
 <body hx-headers='{"X-CSRF-Token":"${session.csrfToken()}"}'>
 <header class="header">
