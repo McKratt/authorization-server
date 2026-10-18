@@ -38,7 +38,7 @@ Base image tags are written directly in each `FROM` line (no `ARG`), so Dependab
 ## CI and dependencies
 
 - `.github/workflows/ci.yml`: on pushes to `main` and on PRs, runs `mvn -B verify` (Testcontainers uses the runner's Docker, no Colima overrides), then builds the image with `docker/build-push-action` using `context: .`. A path context is required: the default git context would not contain `target/`. The image is not pushed.
-- `.github/dependabot.yml`: weekly updates for Maven (minor and patch grouped), Docker and GitHub Actions, assigned to `@McKratt`, with conventional-commit prefixes `build(deps)` / `ci(deps)`. `.github/CODEOWNERS` makes `@McKratt` the required reviewer.
+- `.github/dependabot.yml`: weekly updates for Maven (minor and patch grouped), Docker and GitHub Actions, assigned to `@McKratt`, ignoring Helidon `>= 27` (requires Java 27, non-LTS), with conventional-commit prefixes `build(deps)` / `ci(deps)`. `.github/CODEOWNERS` makes `@McKratt` the required reviewer.
 
 Constraints this imposes:
 - The training and runtime stages must use the same JRE, and the jar plus `libs/` must stay at the same paths. Otherwise the JVM silently ignores the cache. Use `-XX:AOTMode=on` to make a mismatch fail instead of being ignored.

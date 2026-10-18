@@ -11,6 +11,10 @@ updates:
     groups:
       maven-minor-and-patch:
         update-types: [ minor, patch ]
+    ignore:
+      # Helidon 27+ requires Java 27 (non-LTS); stay on the 4.x line running on Java 25 LTS
+      - dependency-name: "io.helidon*"
+        versions: [ ">= 27" ]
 
   - package-ecosystem: docker
     directory: /
