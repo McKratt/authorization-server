@@ -144,6 +144,12 @@ The approved mockup is `pastel-theme.html` in the brainstorm session.
 
 ### HTTP API (HTML/htmx, under `/admin`)
 
+The exact contract is in `docs/openapi.yaml`. It also fixes the sign-in endpoints
+(`GET /admin/login`, `POST /admin/logout`) and the success responses: dialog writes answer
+204 with `HX-Trigger: {"authz:changed":true,"authz:close-dialog":true}`, and role changes made
+inside the application dialog answer 200 with the refreshed dialog. Where this section and the
+OpenAPI file differ, the OpenAPI file wins.
+
 IDs are TSIDs as strings. Form bodies are `application/x-www-form-urlencoded`. Repeated
 `roleId` fields carry several roles.
 
@@ -202,7 +208,8 @@ Every response carries `Cache-Control: no-store`. Unhandled exceptions stay a ba
   `adapter/in/web/admin` on top of Nimbus instead (Nimbus is already a dependency).
 - **Endpoints**:
   - `/oidc/redirect` is the callback.
-  - `/admin/logout` clears the session and goes to Keycloak's end-session endpoint.
+  - `POST /admin/logout` (htmx, with the CSRF header) clears the session and goes to Keycloak's
+    end-session endpoint.
 - **Roles**: Keycloak realm roles `authz-admin` and `authz-reader`, mapped into a flat `roles`
   claim. A signed-in user with neither role gets 403.
 - **Cookie**: `HttpOnly; Secure` (except on localhost in compose); `SameSite=Lax` so the
