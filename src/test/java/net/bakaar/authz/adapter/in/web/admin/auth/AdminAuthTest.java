@@ -262,12 +262,19 @@ class AdminAuthTest {
 
     @Test
     void logoutClearsSessionAndRedirectsToKeycloak() {
-        AdminCookies admin = AdminClient.login(server.port(), keycloak, "ada", "authz-admin");
+        LoginStart start = AdminClient.startLogin(server.port(), "/admin/login");
+        AdminClient.visitKeycloak(start);
+        String idToken = keycloak.stubNextLogin("ada", "authz-admin");
+        String session = AdminClient.callback(server.port(), start.loginCookie(), start.state())
+                .then().statusCode(302).extract().cookie(SESSION_COOKIE);
+        String csrf = AdminClient.csrfToken(server.port(), session);
+        // the session carries the ID token for the logout hint; a Keycloak one is about 1 KB, ours is similar
+        assertThat(session).hasSizeLessThan(3000);
 
         Response response = given().port(server.port()).redirects().follow(false)
-                .cookie(SESSION_COOKIE, admin.session())
+                .cookie(SESSION_COOKIE, session)
                 .header("HX-Request", "true")
-                .header("X-CSRF-Token", admin.csrf())
+                .header("X-CSRF-Token", csrf)
                 .when().post("/admin/logout");
 
         response.then().statusCode(204).header("Cache-Control", "no-store");
@@ -277,7 +284,9 @@ class AdminAuthTest {
         assertThat(hxRedirect.toString()).startsWith(keycloak.baseUrl() + "/logout?");
         assertThat(FakeKeycloak.query(hxRedirect))
                 .containsEntry("client_id", FakeKeycloak.CLIENT_ID)
-                .containsEntry("post_logout_redirect_uri", "http://localhost:8080/admin");
+                .containsEntry("post_logout_redirect_uri", "http://localhost:8080/admin")
+                // with the hint, Keycloak ends the SSO session without asking "Do you want to log out?"
+                .containsEntry("id_token_hint", idToken);
     }
 
     @Test

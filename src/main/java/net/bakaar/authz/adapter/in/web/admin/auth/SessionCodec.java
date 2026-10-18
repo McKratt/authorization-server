@@ -48,6 +48,7 @@ public final class SessionCodec {
                 .subject(session.username())
                 .claim("roles", session.roles().stream().map(AdminRole::claimValue).sorted().toList())
                 .claim("csrf", session.csrfToken())
+                .claim("idt", session.idToken())
                 .expirationTime(Date.from(session.expiresAt()))
                 .build());
     }
@@ -71,7 +72,7 @@ public final class SessionCodec {
                 roleClaims.forEach(role -> AdminRole.fromClaim(role).ifPresent(roles::add));
             }
             return new AdminSession(claims.getSubject(), roles, claims.getStringClaim("csrf"),
-                    claims.getExpirationTime().toInstant());
+                    claims.getStringClaim("idt"), claims.getExpirationTime().toInstant());
         });
     }
 

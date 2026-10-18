@@ -136,7 +136,10 @@ paths:
           csrfToken: []
       responses:
         '204':
-          description: Session cookie cleared. `HX-Redirect` points to Keycloak's end-session endpoint.
+          description: |
+            Session cookie cleared. `HX-Redirect` points to Keycloak's end-session endpoint with `client_id`,
+            `post_logout_redirect_uri` and `id_token_hint` (the ID token of the sign-in), so Keycloak ends the SSO
+            session without a confirmation page.
           headers:
             HX-Redirect: { schema: { type: string } }
 
@@ -484,7 +487,7 @@ components:
       type: apiKey
       in: cookie
       name: AUTHZ_ADMIN_SESSION
-      description: Encrypted session cookie set by `/oidc/redirect`. Carries username, admin roles, CSRF token and expiry.
+      description: Encrypted session cookie set by `/oidc/redirect`. Carries username, admin roles, CSRF token, the ID token of the sign-in (logout hint) and expiry.
     csrfToken:
       type: apiKey
       in: header
