@@ -41,8 +41,8 @@ public final class TestDatabase implements AutoCloseable {
         try (Connection connection = DriverManager.getConnection(jdbcUrl(), username(), password())) {
             long alice = insert(connection, "INSERT INTO app_user (id, username) VALUES (?, ?)", "alice");
             long bob = insert(connection, "INSERT INTO app_user (id, username) VALUES (?, ?)", "bob");
-            long billing = insert(connection, "INSERT INTO application (id, name) VALUES (?, ?)", "billing");
-            long crm = insert(connection, "INSERT INTO application (id, name) VALUES (?, ?)", "crm");
+            long billing = insertApplication(connection, "billing");
+            long crm = insertApplication(connection, "crm");
             long billingAdmin = insertRole(connection, billing, "admin");
             long billingViewer = insertRole(connection, billing, "viewer");
             long crmAdmin = insertRole(connection, crm, "admin");
@@ -64,6 +64,49 @@ public final class TestDatabase implements AutoCloseable {
             statement.executeUpdate();
         }
         return id;
+    }
+
+    private static long insertApplication(Connection connection, String name) throws SQLException {
+        long id = Ids.next();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO application (id, name, responsible) VALUES (?, ?, ?)")) {
+            statement.setLong(1, id);
+            statement.setString(2, name);
+            statement.setString(3, name + "@bakaar.net");
+            statement.executeUpdate();
+        }
+        return id;
+    }
+
+    /**
+     * Looks up an id by name: "app_user" by username, "application" by name, "role" by "app/role".
+     */
+    public long idOf(String table, String name) {
+        String sql = switch (table) {
+            case "app_user" -> "SELECT id FROM app_user WHERE username = ?";
+            case "application" -> "SELECT id FROM application WHERE name = ?";
+            case "role" -> "SELECT r.id FROM role r JOIN application a ON a.id = r.application_id"
+                    + " WHERE a.name = ? AND r.name = ?";
+            default -> throw new IllegalArgumentException("unsupported table " + table);
+        };
+        try (Connection connection = DriverManager.getConnection(jdbcUrl(), username(), password());
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            if (table.equals("role")) {
+                String[] parts = name.split("/", 2);
+                statement.setString(1, parts[0]);
+                statement.setString(2, parts[1]);
+            } else {
+                statement.setString(1, name);
+            }
+            try (var rows = statement.executeQuery()) {
+                if (!rows.next()) {
+                    throw new IllegalStateException("no " + table + " named " + name);
+                }
+                return rows.getLong(1);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to look up " + table + " " + name, e);
+        }
     }
 
     private static long insertRole(Connection connection, long applicationId, String name) throws SQLException {
