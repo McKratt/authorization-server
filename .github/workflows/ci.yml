@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # Unit and Testcontainers tests (the runner provides Docker); produces target/*.jar and target/libs/
+      - name: Build and test
+        run: mvn -B verify
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Path context (not the git context) so the Maven output in target/ is sent to the build
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          tags: authorization-server:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

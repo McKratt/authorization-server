@@ -1,5 +1,9 @@
-target
+# Only the Maven output needed by the image is sent from target/ (built by CI or `mvn package`)
+target/*
+!target/authorization-server.jar
+!target/libs
 .git
+.github
 .idea
 .remember
 *.iml

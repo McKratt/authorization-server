@@ -1,20 +1,13 @@
 # syntax=docker/dockerfile:1
 
-ARG ALPINE_VERSION=3.23
+# The Maven build runs outside Docker (GitHub Actions, or `mvn package` locally):
+# the image is assembled from target/authorization-server.jar and target/libs/.
 
-# --- Stage 1: build the application jar and its dependency libs ---
-FROM maven:3-eclipse-temurin-25-alpine AS build
-WORKDIR /build
-COPY pom.xml .
-RUN --mount=type=cache,target=/root/.m2 mvn -B -q dependency:go-offline
-COPY src src
-RUN --mount=type=cache,target=/root/.m2 mvn -B -q -DskipTests package
-
-# --- Stage 2: custom JRE with jlink, containing only the modules the app needs ---
+# --- Stage 1: custom JRE with jlink, containing only the modules the app needs ---
 FROM eclipse-temurin:25-jdk-alpine AS jre
 WORKDIR /build
-COPY --from=build /build/target/authorization-server.jar .
-COPY --from=build /build/target/libs libs
+COPY target/authorization-server.jar .
+COPY target/libs libs
 # jdk.unsupported is used reflectively (sun.misc.Unsafe) and is not detected by jdeps.
 RUN modules="$(jdeps --ignore-missing-deps --print-module-deps --multi-release 25 \
             --class-path 'libs/*' authorization-server.jar libs/*.jar 2>/dev/null | tail -1),jdk.unsupported" \
@@ -24,15 +17,15 @@ RUN modules="$(jdeps --ignore-missing-deps --print-module-deps --multi-release 2
             --compress=zip-6 \
             --output /opt/jre
 
-# --- Stage 3: Leyden AOT training run (JEP 483/514/515) ---
+# --- Stage 2: Leyden AOT training run (JEP 483/514/515) ---
 # Must run on the exact same JRE and class path as the final image: the AOT cache
 # is only accepted when the JVM build and the jar paths/timestamps match.
-FROM alpine:${ALPINE_VERSION} AS aot
+FROM alpine:3.23 AS aot
 ENV JAVA_HOME=/opt/jre PATH=/opt/jre/bin:$PATH
 COPY --from=jre /opt/jre /opt/jre
 WORKDIR /app
-COPY --from=build /build/target/authorization-server.jar .
-COPY --from=build /build/target/libs libs
+COPY target/authorization-server.jar .
+COPY target/libs libs
 # Start the server, exercise it, then SIGTERM it: the JVM writes the cache on exit.
 # No database or identity provider exists during the build: migrations are disabled and the JWT
 # settings are placeholders (only unauthenticated requests are exercised, no JWKS is fetched).
@@ -57,8 +50,8 @@ wait "$pid" || true
 test -s app.aot
 EOF
 
-# --- Stage 4: runtime image ---
-FROM alpine:${ALPINE_VERSION}
+# --- Stage 3: runtime image ---
+FROM alpine:3.23
 ENV JAVA_HOME=/opt/jre PATH=/opt/jre/bin:$PATH
 RUN addgroup -S app && adduser -S -G app app
 COPY --from=aot /opt/jre /opt/jre
