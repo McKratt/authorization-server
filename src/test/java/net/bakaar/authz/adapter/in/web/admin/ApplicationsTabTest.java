@@ -36,6 +36,8 @@ class ApplicationsTabTest {
     private static final String FORM = "application/x-www-form-urlencoded; charset=UTF-8";
     private static final String RENAME_WARNING =
             "Renaming changes what client applications must send to the authorization API.";
+    private static final String ROLE_RENAME_WARNING =
+            "Renaming a role changes the role names client applications receive from the authorization API.";
 
     private static TestDatabase database;
     private static FakeKeycloak keycloak;
@@ -130,6 +132,7 @@ class ApplicationsTabTest {
         String body = as(admin).when().get("/admin/applications/" + crm).then().statusCode(200).extract().asString();
 
         assertThat(body).contains("<dialog", "value=\"crm\"", "value=\"crm@bakaar.net\"", RENAME_WARNING,
+                ROLE_RENAME_WARNING,
                 "hx-put=\"/admin/applications/" + crm + "\"",
                 "hx-get=\"/admin/applications/" + crm + "/delete\"",
                 "hx-post=\"/admin/applications/" + crm + "/roles\"",

@@ -35,12 +35,15 @@ public final class LoginRoutes implements HttpService {
     private final OidcSettings settings;
     private final SessionCookies cookies;
     private final Duration sessionDuration;
+    private final AuthPages pages;
 
-    public LoginRoutes(OidcClient oidc, OidcSettings settings, SessionCookies cookies, Duration sessionDuration) {
+    public LoginRoutes(OidcClient oidc, OidcSettings settings, SessionCookies cookies, Duration sessionDuration,
+                       AuthPages pages) {
         this.oidc = oidc;
         this.settings = settings;
         this.cookies = cookies;
         this.sessionDuration = sessionDuration;
+        this.pages = pages;
     }
 
     @Override
@@ -71,6 +74,12 @@ public final class LoginRoutes implements HttpService {
         response.header(HeaderNames.CACHE_CONTROL, "no-store");
         Optional<LoginState> found = cookies.loginState(request);
         cookies.clearLoginState(response);
+        if (request.query().contains("error")) {
+            // RFC 6749 4.1.2.1: the user cancelled or Keycloak refused; the error code is not reflected
+            LOGGER.fine("Admin sign-in callback carries an error instead of a code");
+            pages.signInCancelled(request, response);
+            return;
+        }
         List<String> states = request.query().all("state", List::of);
         List<String> codes = request.query().all("code", List::of);
         if (found.isEmpty() || states.size() != 1 || codes.size() != 1

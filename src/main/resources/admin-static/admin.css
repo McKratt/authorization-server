@@ -7,6 +7,8 @@
  * (unless the user picked light) or when the user picked dark. The theme tokens are those of the approved
  * mockup. Where a token fails WCAG AA as small text (--muted on tinted surfaces, --accent, --danger), text uses
  * the *-text / --accent-strong variants instead, which pass AA (4.5:1) in both themes.
+ * The eight application hues stay apart in both themes (app-5 is lime: a lilac read as app-2's sky); AdminPaletteTest
+ * checks the contrast and the distance.
  */
 
 :root {
@@ -36,7 +38,7 @@
     --sky: #e3ecfd;    --sky-text: #2f4f8a;
     --rose: #fbe3f0;   --rose-text: #86345e;
     --butter: #fbf3d5; --butter-text: #7a6420;
-    --lilac: #ece6fb;  --lilac-text: #5b4a99;
+    --lime: #e2f2c4;   --lime-text: #476119;
     --aqua: #dcf3f5;   --aqua-text: #245f66;
     --sand: #f3ebdf;   --sand-text: #6b5434;
 }
@@ -68,7 +70,7 @@
         --sky: #232f45;    --sky-text: #b3cbf7;
         --rose: #3b2433;   --rose-text: #f3b4d4;
         --butter: #373220; --butter-text: #efdc98;
-        --lilac: #2e2945;  --lilac-text: #cfc3f7;
+        --lime: #2d3d1c;   --lime-text: #cfe8a0;
         --aqua: #1f3739;   --aqua-text: #a3e0e5;
         --sand: #36302a;   --sand-text: #e6d3b8;
     }
@@ -103,7 +105,7 @@
     --sky: #232f45;    --sky-text: #b3cbf7;
     --rose: #3b2433;   --rose-text: #f3b4d4;
     --butter: #373220; --butter-text: #efdc98;
-    --lilac: #2e2945;  --lilac-text: #cfc3f7;
+    --lime: #2d3d1c;   --lime-text: #cfe8a0;
     --aqua: #1f3739;   --aqua-text: #a3e0e5;
     --sand: #36302a;   --sand-text: #e6d3b8;
 }
@@ -119,7 +121,7 @@
 .app-2 { --app-bg: var(--sky);    --app-text: var(--sky-text); }
 .app-3 { --app-bg: var(--rose);   --app-text: var(--rose-text); }
 .app-4 { --app-bg: var(--butter); --app-text: var(--butter-text); }
-.app-5 { --app-bg: var(--lilac);  --app-text: var(--lilac-text); }
+.app-5 { --app-bg: var(--lime);   --app-text: var(--lime-text); }
 .app-6 { --app-bg: var(--aqua);   --app-text: var(--aqua-text); }
 .app-7 { --app-bg: var(--sand);   --app-text: var(--sand-text); }
 

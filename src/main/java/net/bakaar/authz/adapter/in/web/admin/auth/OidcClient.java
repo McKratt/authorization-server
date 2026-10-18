@@ -9,6 +9,7 @@ import com.nimbusds.jose.proc.BadJOSEException;
 import com.nimbusds.jose.proc.DefaultJOSEObjectTypeVerifier;
 import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
+import com.nimbusds.jose.util.DefaultResourceRetriever;
 import com.nimbusds.jose.util.JSONObjectUtils;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.DefaultJWTClaimsVerifier;
@@ -46,6 +47,7 @@ import java.util.stream.Collectors;
  */
 public class OidcClient {
 
+    /** For every call to Keycloak, the JWKS fetch included (Nimbus would otherwise give up after 500 ms). */
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     private final OidcSettings settings;
@@ -191,7 +193,8 @@ public class OidcClient {
                     endpoint(document, "authorization_endpoint", true),
                     endpoint(document, "token_endpoint", true),
                     endpoint(document, "end_session_endpoint", false),
-                    JWKSourceBuilder.<SecurityContext>create(jwksUri.toURL()).build());
+                    JWKSourceBuilder.<SecurityContext>create(jwksUri.toURL(), new DefaultResourceRetriever(
+                            (int) TIMEOUT.toMillis(), (int) TIMEOUT.toMillis())).build());
         } catch (ParseException | MalformedURLException | IllegalArgumentException e) {
             throw new OidcException("Discovery document is invalid");
         }
