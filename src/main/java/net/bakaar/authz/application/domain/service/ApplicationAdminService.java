@@ -36,6 +36,10 @@ import net.bakaar.authz.application.port.out.UserStore;
  * Administers applications and their roles. Every use case, reads included, runs in one transaction.
  * A removal that would leave users without any role deletes those users, but only when the caller
  * confirmed exactly the users computed inside the same transaction.
+ * <p>
+ * Deletions lock what they delete first (application, then its roles, then the users holding them), so grants and
+ * roles being added concurrently, which lock what they reference against deletion, are committed and counted
+ * before the orphans are computed.
  */
 public class ApplicationAdminService implements ListApplications, GetApplication, CreateApplication,
         UpdateApplication, DeleteApplication, AddRole, UpdateRole, DeleteRole, PreviewApplicationChanges {
@@ -91,11 +95,12 @@ public class ApplicationAdminService implements ListApplications, GetApplication
     @Override
     public void deleteApplication(ApplicationId id, Set<UserId> confirmedRemovals) {
         transactions.run(() -> {
-            Set<RoleId> removed = applicationRoleIds(id);
-            List<UserSummary> orphans = requireConfirmed(removed, confirmedRemovals);
-            if (!applications.delete(id)) {
+            if (!applications.lockForDeletion(id)) {
                 throw applicationNotFound(id);
             }
+            Set<RoleId> removed = applications.lockRolesForDeletion(id);
+            List<UserSummary> orphans = requireConfirmed(removed, confirmedRemovals);
+            applications.delete(id);
             users.deleteUsersWithoutRoles(ids(orphans));
         });
     }
@@ -103,7 +108,9 @@ public class ApplicationAdminService implements ListApplications, GetApplication
     @Override
     public RoleId addRole(ApplicationId app, NewRole role) {
         return transactions.inTransaction(() -> {
-            requireApplication(app);
+            if (!applications.lockAgainstDeletion(app)) {
+                throw applicationNotFound(app);
+            }
             RoleId id = RoleId.next();
             applications.insertRole(app, id, role);
             return id;
@@ -122,11 +129,11 @@ public class ApplicationAdminService implements ListApplications, GetApplication
     @Override
     public void deleteRole(ApplicationId app, RoleId role, Set<UserId> confirmedRemovals) {
         transactions.run(() -> {
-            requireRoleOf(app, role);
-            List<UserSummary> orphans = requireConfirmed(Set.of(role), confirmedRemovals);
-            if (!applications.deleteRole(app, role)) {
+            if (!applications.lockRoleForDeletion(app, role)) {
                 throw roleNotFound(app, role);
             }
+            List<UserSummary> orphans = requireConfirmed(Set.of(role), confirmedRemovals);
+            applications.deleteRole(app, role);
             users.deleteUsersWithoutRoles(ids(orphans));
         });
     }
@@ -149,8 +156,8 @@ public class ApplicationAdminService implements ListApplications, GetApplication
     }
 
     /**
-     * Locks the affected users first, so a concurrent grant change waits and the orphan query sees its outcome,
-     * then rejects the change unless the caller confirmed exactly the orphaned users.
+     * With the removed roles already locked, locks the affected users, so a concurrent grant change waits and the
+     * orphan query sees its outcome, then rejects the change unless the caller confirmed exactly the orphaned users.
      */
     private List<UserSummary> requireConfirmed(Set<RoleId> removed, Set<UserId> confirmedRemovals) {
         grants.lockUsersHolding(removed);

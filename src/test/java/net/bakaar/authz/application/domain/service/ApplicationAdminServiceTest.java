@@ -39,6 +39,7 @@ import net.bakaar.authz.application.domain.model.UserSummary;
 import net.bakaar.authz.application.domain.model.Username;
 import net.bakaar.authz.application.port.in.CreateApplicationCommand;
 import net.bakaar.authz.application.port.in.UpdateApplicationCommand;
+import net.bakaar.authz.common.Ids;
 import net.bakaar.authz.support.TestDatabase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -244,6 +245,84 @@ class ApplicationAdminServiceTest {
     }
 
     @Test
+    @Timeout(60)
+    void concurrentCreateUserBlocksRoleDeletion() throws Exception {
+        ApplicationId crm = application("crm");
+        RoleId crmAdmin = role("crm/admin");
+        UserId bob = user("bob");
+        UserId victor = new UserId(Ids.next());
+        try (Connection creator = DriverManager.getConnection(
+                database.jdbcUrl(), database.username(), database.password())) {
+            creator.setAutoCommit(false);
+            createUserHolding(creator, victor, "victor", crmAdmin);
+            // victor and his only grant exist, uncommitted, as in the middle of createUser
+
+            CompletableFuture<Void> deletion = CompletableFuture.runAsync(
+                    () -> service.deleteRole(crm, crmAdmin, Set.of(bob)));
+            awaitBlockedOnLock();
+            assertThat(deletion).isNotDone();
+            creator.commit();
+
+            assertThatThrownBy(() -> deletion.get(30, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(UnconfirmedRemovalException.class)
+                    .cause().isInstanceOfSatisfying(UnconfirmedRemovalException.class, e ->
+                            assertThat(e.wouldRemove()).extracting(UserSummary::id)
+                                    .containsExactlyInAnyOrder(bob, victor));
+        }
+        assertThat(service.getApplication(crm).roles()).extracting(RoleDetails::id).contains(crmAdmin);
+        assertThat(grantCount(victor)).isEqualTo(1);
+    }
+
+    @Test
+    @Timeout(60)
+    void concurrentCreateUserBlocksApplicationDeletion() throws Exception {
+        ApplicationId crm = application("crm");
+        UserId bob = user("bob");
+        UserId victor = new UserId(Ids.next());
+        try (Connection creator = DriverManager.getConnection(
+                database.jdbcUrl(), database.username(), database.password())) {
+            creator.setAutoCommit(false);
+            createUserHolding(creator, victor, "victor", role("crm/admin"));
+
+            CompletableFuture<Void> deletion = CompletableFuture.runAsync(
+                    () -> service.deleteApplication(crm, Set.of(bob)));
+            awaitBlockedOnLock();
+            assertThat(deletion).isNotDone();
+            creator.commit();
+
+            assertThatThrownBy(() -> deletion.get(30, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(UnconfirmedRemovalException.class)
+                    .cause().isInstanceOfSatisfying(UnconfirmedRemovalException.class, e ->
+                            assertThat(e.wouldRemove()).extracting(UserSummary::id)
+                                    .containsExactlyInAnyOrder(bob, victor));
+        }
+        assertThat(service.listApplications()).extracting(a -> a.name().value()).contains("crm");
+        assertThat(grantCount(victor)).isEqualTo(1);
+    }
+
+    @Test
+    @Timeout(60)
+    void addRoleWaitsForAConcurrentApplicationDeletion() throws Exception {
+        ApplicationId crm = application("crm");
+        try (Connection deleter = DriverManager.getConnection(
+                database.jdbcUrl(), database.username(), database.password())) {
+            deleter.setAutoCommit(false);
+            try (PreparedStatement delete = deleter.prepareStatement("DELETE FROM application WHERE id = ?")) {
+                delete.setLong(1, crm.value());
+                delete.executeUpdate();
+            }
+
+            CompletableFuture<RoleId> adding = CompletableFuture.supplyAsync(
+                    () -> service.addRole(crm, newRole("auditor")));
+            awaitBlockedOnLock();
+            assertThat(adding).isNotDone();
+            deleter.commit();
+
+            assertThatThrownBy(() -> adding.get(30, TimeUnit.SECONDS)).hasCauseInstanceOf(NotFoundException.class);
+        }
+    }
+
+    @Test
     void duplicateNamesOnUpdateAreConflicts() {
         ApplicationId crm = application("crm");
         ApplicationId billing = application("billing");
@@ -286,7 +365,35 @@ class ApplicationAdminServiceTest {
                 Thread.sleep(50);
             }
         }
-        throw new AssertionError("deletion never blocked on the lock");
+        throw new AssertionError("the use case never blocked on the lock");
+    }
+
+    private static void createUserHolding(Connection connection, UserId user, String username, RoleId role)
+            throws Exception {
+        try (PreparedStatement insertUser = connection.prepareStatement(
+                "INSERT INTO app_user (id, username) VALUES (?, ?)");
+             PreparedStatement grant = connection.prepareStatement(
+                     "INSERT INTO user_role (user_id, role_id) VALUES (?, ?)")) {
+            insertUser.setLong(1, user.value());
+            insertUser.setString(2, username);
+            insertUser.executeUpdate();
+            grant.setLong(1, user.value());
+            grant.setLong(2, role.value());
+            grant.executeUpdate();
+        }
+    }
+
+    private int grantCount(UserId user) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                database.jdbcUrl(), database.username(), database.password());
+             PreparedStatement query = connection.prepareStatement(
+                     "SELECT count(*) FROM user_role WHERE user_id = ?")) {
+            query.setLong(1, user.value());
+            try (ResultSet rs = query.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
     }
 
     private boolean exists(UserId id) {

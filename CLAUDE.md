@@ -162,7 +162,10 @@ Invariants (keep them):
 - **Headers.** `/admin` and `/oidc` responses carry `Cache-Control: no-store`, and `/admin` responses carry a CSP without inline scripts or styles. The htmx history cache is disabled (`historyCacheSize: 0`, `refreshOnHistoryMiss: true` in `htmx-config`).
 - **At least one grant.** Every user always keeps at least one grant.
   - A change that would orphan users deletes them in the same transaction, but only if the request's `confirmedUserIds` equals the set computed in that transaction. Otherwise nothing changes, and the answer is 409 with a new confirmation dialog.
-  - This relies on PostgreSQL READ COMMITTED plus `SELECT … FOR UPDATE` on the affected users' rows before the orphans are computed.
+  - This relies on PostgreSQL READ COMMITTED plus row locks, always taken in the order application → roles → users, and expressed as port methods (`ApplicationStore.lock*`, `GrantStore.lockUsersHolding`, `UserStore.lock`), never as SQL in the domain:
+    - Deleters lock what they delete `FOR UPDATE` before computing orphans: `deleteApplication` locks the application, then all its roles, then the users holding them; `deleteRole` locks the role, then its users.
+    - Writers lock what they reference `FOR KEY SHARE`: `createUser` and `grantRoles` lock the granted roles (`lockRolesAgainstDeletion`; a count mismatch is the 422 "Roles must belong to the selected application"), and `addRole` locks the application.
+    - So a grant in flight either commits first and is counted as an orphan to confirm (409), or waits for the deletion and gets 422 or 404; a user is never left without a grant.
 
 `docs/openapi.yaml` is the HTTP contract of both surfaces. Keep it in sync with the routes, and lint it with `npx -y @redocly/cli@1.34.5 lint docs/openapi.yaml`.
 

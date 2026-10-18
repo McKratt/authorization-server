@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Set;
 import net.bakaar.authz.application.domain.model.ApplicationDetails;
 import net.bakaar.authz.application.domain.model.ApplicationId;
 import net.bakaar.authz.application.domain.model.ApplicationName;
@@ -86,6 +87,30 @@ class JdbcApplicationStoreTest {
                 id, new ApplicationName("wiki"), new Email("wiki@bakaar.net"), Description.EMPTY))).isTrue();
         assertThat(fixture.transactions.inTransaction(() -> fixture.applications.delete(id))).isTrue();
         assertThat(fixture.transactions.inTransaction(() -> fixture.applications.find(id))).isEmpty();
+    }
+
+    @Test
+    void lockMethodsReportOnlyRowsOfTheApplication() {
+        ApplicationId billing = new ApplicationId(fixture.database.idOf("application", "billing"));
+        RoleId billingAdmin = new RoleId(fixture.database.idOf("role", "billing/admin"));
+        RoleId billingViewer = new RoleId(fixture.database.idOf("role", "billing/viewer"));
+        RoleId crmAdmin = new RoleId(fixture.database.idOf("role", "crm/admin"));
+        ApplicationId unknown = ApplicationId.next();
+
+        fixture.transactions.run(() -> {
+            assertThat(fixture.applications.lockAgainstDeletion(billing)).isTrue();
+            assertThat(fixture.applications.lockAgainstDeletion(unknown)).isFalse();
+            assertThat(fixture.applications.lockForDeletion(billing)).isTrue();
+            assertThat(fixture.applications.lockForDeletion(unknown)).isFalse();
+            assertThat(fixture.applications.lockRolesAgainstDeletion(billing, Set.of(billingAdmin, crmAdmin)))
+                    .containsExactly(billingAdmin);
+            assertThat(fixture.applications.lockRolesAgainstDeletion(billing, Set.of())).isEmpty();
+            assertThat(fixture.applications.lockRoleForDeletion(billing, billingViewer)).isTrue();
+            assertThat(fixture.applications.lockRoleForDeletion(billing, crmAdmin)).isFalse();
+            assertThat(fixture.applications.lockRolesForDeletion(billing))
+                    .containsExactlyInAnyOrder(billingAdmin, billingViewer);
+            assertThat(fixture.applications.lockRolesForDeletion(unknown)).isEmpty();
+        });
     }
 
     private static ApplicationSummary byName(List<ApplicationSummary> all, String name) {

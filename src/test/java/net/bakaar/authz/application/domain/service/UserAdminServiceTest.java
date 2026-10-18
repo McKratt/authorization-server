@@ -239,6 +239,60 @@ class UserAdminServiceTest {
         assertThat(roleNames(service.getUser(alice))).containsExactly("crm:viewer");
     }
 
+    @Test
+    @Timeout(60)
+    void createUserWaitsForAConcurrentRoleDeletion() throws Exception {
+        RoleId crmAdmin = role("crm/admin");
+        try (Connection deleter = DriverManager.getConnection(
+                database.jdbcUrl(), database.username(), database.password())) {
+            deleter.setAutoCommit(false);
+            deleteRoleUncommitted(deleter, crmAdmin);
+
+            CompletableFuture<UserId> creation = CompletableFuture.supplyAsync(() -> service.createUser(
+                    new CreateUserCommand(new Username("victor"), application("crm"), Set.of(crmAdmin))));
+            awaitBlockedOnLock();
+            assertThat(creation).isNotDone();
+            deleter.commit();
+
+            assertThatThrownBy(() -> creation.get(30, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(InvalidInputException.class)
+                    .cause().isInstanceOfSatisfying(InvalidInputException.class, e ->
+                            assertThat(e.fieldErrors())
+                                    .containsEntry("roleId", "Roles must belong to the selected application"));
+        }
+        assertThat(service.listUsers()).extracting(u -> u.username().value()).doesNotContain("victor");
+    }
+
+    @Test
+    @Timeout(60)
+    void grantWaitsForAConcurrentRoleDeletion() throws Exception {
+        RoleId crmAdmin = role("crm/admin");
+        UserId alice = user("alice");
+        try (Connection deleter = DriverManager.getConnection(
+                database.jdbcUrl(), database.username(), database.password())) {
+            deleter.setAutoCommit(false);
+            deleteRoleUncommitted(deleter, crmAdmin);
+
+            CompletableFuture<Void> grant = CompletableFuture.runAsync(() -> service.grantRoles(
+                    new GrantRolesCommand(alice, application("crm"), Set.of(crmAdmin))));
+            awaitBlockedOnLock();
+            assertThat(grant).isNotDone();
+            deleter.commit();
+
+            assertThatThrownBy(() -> grant.get(30, TimeUnit.SECONDS)).hasCauseInstanceOf(InvalidInputException.class);
+        }
+        assertThat(roleNames(service.getUser(alice)))
+                .containsExactly("billing:admin", "billing:viewer", "crm:viewer");
+    }
+
+    /** What deleteRole holds before it commits: the role row locked and deleted. */
+    private static void deleteRoleUncommitted(Connection connection, RoleId role) throws SQLException {
+        try (PreparedStatement delete = connection.prepareStatement("DELETE FROM role WHERE id = ?")) {
+            delete.setLong(1, role.value());
+            delete.executeUpdate();
+        }
+    }
+
     private void awaitBlockedOnLock() throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         try (Connection monitor = DriverManager.getConnection(
@@ -255,7 +309,7 @@ class UserAdminServiceTest {
                 Thread.sleep(50);
             }
         }
-        throw new AssertionError("revocation never blocked on the lock");
+        throw new AssertionError("the use case never blocked on the lock");
     }
 
     private int count(String sql) {
