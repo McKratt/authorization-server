@@ -19,3 +19,14 @@ jwt:
   algorithms: [ RS256 ]
   clock-skew: PT30S
   allow-insecure-jwks-uri: false
+
+# Admin UI. It is enabled only when admin.oidc.issuer is set; otherwise /admin is not routed.
+# Env vars: ADMIN_OIDC_ISSUER, ADMIN_OIDC_CLIENT_ID, ADMIN_OIDC_CLIENT_SECRET, ADMIN_OIDC_REDIRECT_URI,
+# ADMIN_OIDC_DISCOVERY_BASE_URL (optional: internal address of Keycloak for back-channel calls, defaults to the issuer),
+# ADMIN_OIDC_ALLOW_INSECURE (local only: allows http), ADMIN_SESSION_KEY (required: base64 of 32 random bytes,
+# e.g. `openssl rand -base64 32`), ADMIN_SESSION_DURATION, ADMIN_COOKIE_SECURE.
+admin:
+  session-duration: PT8H
+  cookie-secure: true
+  oidc:
+    allow-insecure: false
