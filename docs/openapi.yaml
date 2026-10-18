@@ -115,8 +115,12 @@ paths:
       tags: [admin-session]
       summary: Sign-in callback from Keycloak
       parameters:
-        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, description: Absent when Keycloak sends `error` instead., schema: { type: string } }
         - { name: state, in: query, required: true, schema: { type: string } }
+        - name: error
+          in: query
+          description: Set by Keycloak instead of `code` when the sign-in was cancelled or refused (RFC 6749 4.1.2.1).
+          schema: { type: string, example: access_denied }
       responses:
         '302':
           description: Signed in. Sets the session cookie and redirects to the saved `returnTo`.
@@ -127,7 +131,15 @@ paths:
             Location:
               schema: { type: string }
         '400':
-          description: Missing or mismatching state, missing login cookie, or a failed code exchange or ID token check.
+          description: |
+            With `error`: an HTML page saying the sign-in was cancelled, with a link to `/admin/login` (nothing from
+            the query is shown). Otherwise, empty: missing or mismatching state, missing login cookie, or a failed
+            code exchange or ID token check (wrong signature or algorithm, unknown key, `jku` ignored, issuer,
+            audience, nonce, expiry, username). The login cookie is cleared and no session is set.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            text/html: { schema: { type: string } }
   /admin/logout:
     post:
       operationId: logout

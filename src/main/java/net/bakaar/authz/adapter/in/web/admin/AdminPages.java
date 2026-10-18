@@ -91,6 +91,11 @@ public final class AdminPages implements AuthPages {
         render(request, response, Status.FORBIDDEN_403, "forbidden.jte", Map.of("session", session));
     }
 
+    @Override
+    public void signInCancelled(ServerRequest request, ServerResponse response) {
+        render(request, response, Status.BAD_REQUEST_400, "sign-in-cancelled.jte", Map.of());
+    }
+
     /**
      * Error handler for {@link NotFoundException} (unknown or malformed ID): 404 with no body.
      */

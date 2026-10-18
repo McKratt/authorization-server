@@ -52,6 +52,9 @@
         </form>
         <section class="roles" aria-labelledby="roles-title">
             <h3 id="roles-title">Roles</h3>
+            @if(!application.roles().isEmpty())
+                <p class="note" id="role-rename-note">Renaming a role changes the role names client applications receive from the authorization API.</p>
+            @endif
             @for(RoleDetails role : application.roles())
                 !{String roleId = role.id().asString();}
                 !{boolean edited = roleId.equals(editedRoleId);}

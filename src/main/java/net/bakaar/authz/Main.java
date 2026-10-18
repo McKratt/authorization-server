@@ -65,43 +65,68 @@ public final class Main {
      * Composition root: wires outgoing adapters, domain services and incoming adapters.
      */
     public static RunningServer start(Config config) {
+        // configuration is validated before the pool exists, so a bad value cannot leak it
+        JwtSettings jwtSettings = JwtSettings.fromConfig(config.get("jwt"));
+        Optional<AdminConfig> adminConfig = adminConfig(config.get("admin"));
         HikariDataSource dataSource = Database.dataSource(config.get("db"));
-        if (config.get("db.migrate").asBoolean().orElse(true)) {
-            Database.migrate(dataSource);
-        }
-        GetAuthorization getAuthorization = new AuthorizationService(
-                new JwtAccessTokenVerifier(JwtSettings.fromConfig(config.get("jwt"))),
-                new UserRolesPersistenceAdapter(dataSource));
-        Consumer<HttpRouting.Builder> adminUi = adminUi(config.get("admin"), dataSource);
+        try {
+            if (config.get("db.migrate").asBoolean().orElse(true)) {
+                Database.migrate(dataSource);
+            }
+            GetAuthorization getAuthorization = new AuthorizationService(
+                    new JwtAccessTokenVerifier(jwtSettings),
+                    new UserRolesPersistenceAdapter(dataSource));
+            Consumer<HttpRouting.Builder> adminUi = adminConfig
+                    .map(admin -> adminUi(admin, dataSource))
+                    .orElse(routing -> { });
 
-        WebServer webServer = WebServer.builder()
-                .config(config.get("server"))
-                .routing(routing -> routing(routing, getAuthorization, adminUi))
-                .build()
-                .start();
-        return new RunningServer(webServer, dataSource);
+            WebServer webServer = WebServer.builder()
+                    .config(config.get("server"))
+                    .routing(routing -> routing(routing, getAuthorization, adminUi))
+                    .build()
+                    .start();
+            return new RunningServer(webServer, dataSource);
+        } catch (RuntimeException e) {
+            dataSource.close();
+            throw e;
+        }
     }
 
     /**
-     * Routes of the admin UI, or none when {@code admin.oidc.issuer} is not configured. Nothing here contacts
-     * Keycloak: discovery happens on the first sign-in, so the server starts while Keycloak is unreachable.
+     * Settings of the admin UI, or empty (with a WARNING) when {@code admin.oidc.issuer} is not configured.
+     *
+     * @throws RuntimeException when the admin UI is configured with an invalid value
      */
-    private static Consumer<HttpRouting.Builder> adminUi(Config admin, HikariDataSource dataSource) {
+    private static Optional<AdminConfig> adminConfig(Config admin) {
         Optional<OidcSettings> oidcSettings = OidcSettings.fromConfig(admin);
         if (oidcSettings.isEmpty()) {
             LOGGER.warning("admin.oidc.issuer is not configured: the admin UI is disabled");
-            return routing -> { };
+            return Optional.empty();
         }
-        OidcSettings settings = oidcSettings.get();
-        SessionCookies cookies = new SessionCookies(
-                new SessionCodec(sessionKey(admin.get("session-key"))),
-                admin.get("cookie-secure").asBoolean().orElse(true));
+        return Optional.of(new AdminConfig(
+                oidcSettings.get(),
+                sessionKey(admin.get("session-key")),
+                admin.get("cookie-secure").asBoolean().orElse(true),
+                admin.get("session-duration").as(Duration.class).orElse(Duration.ofHours(8))));
+    }
+
+    private record AdminConfig(OidcSettings oidc, byte[] sessionKey, boolean cookieSecure, Duration sessionDuration) {
+    }
+
+    /**
+     * Routes of the admin UI. Nothing here contacts Keycloak: discovery happens on the first sign-in, so the server
+     * starts while Keycloak is unreachable.
+     */
+    private static Consumer<HttpRouting.Builder> adminUi(AdminConfig admin, HikariDataSource dataSource) {
+        OidcSettings settings = admin.oidc();
+        SessionCookies cookies = new SessionCookies(new SessionCodec(admin.sessionKey()), admin.cookieSecure());
         OidcClient oidc = new OidcClient(settings, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build());
-        LoginRoutes login = new LoginRoutes(oidc, settings, cookies,
-                admin.get("session-duration").as(Duration.class).orElse(Duration.ofHours(8)));
+        // precompiled by jte-maven-plugin: rendering needs no Java compiler at runtime
+        AdminPages pages = new AdminPages(TemplateEngine.createPrecompiled(ContentType.Html));
+        LoginRoutes login = new LoginRoutes(oidc, settings, cookies, admin.sessionDuration(), pages);
         JdbcTransactions transactions = new JdbcTransactions(dataSource);
         JdbcUserStore userStore = new JdbcUserStore(transactions);
         JdbcApplicationStore applicationStore = new JdbcApplicationStore(transactions);
@@ -114,8 +139,6 @@ public final class Main {
         ApplicationAdminPorts applicationPorts = new ApplicationAdminPorts(applicationAdmin, applicationAdmin,
                 applicationAdmin, applicationAdmin, applicationAdmin, applicationAdmin, applicationAdmin,
                 applicationAdmin, applicationAdmin);
-        // precompiled by jte-maven-plugin: rendering needs no Java compiler at runtime
-        AdminPages pages = new AdminPages(TemplateEngine.createPrecompiled(ContentType.Html));
         return routing -> routing.addFilter(new AdminAuthFilter(cookies, pages))
                 .register("/admin/static", StaticContentFeature.createService(ClasspathHandlerConfig.builder()
                         .location("admin-static")

@@ -1,16 +1,30 @@
 package net.bakaar.authz.adapter.in.web.admin.auth;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static io.restassured.RestAssured.given;
 import static net.bakaar.authz.support.AdminClient.LOGIN_COOKIE;
 import static net.bakaar.authz.support.AdminClient.SESSION_COOKIE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.startsWith;
 
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.PlainJWT;
+import com.nimbusds.jwt.SignedJWT;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
 import io.restassured.response.Response;
@@ -20,18 +34,22 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import net.bakaar.authz.Main;
 import net.bakaar.authz.support.AdminClient;
 import net.bakaar.authz.support.AdminClient.AdminCookies;
 import net.bakaar.authz.support.AdminClient.LoginStart;
 import net.bakaar.authz.support.FakeKeycloak;
 import net.bakaar.authz.support.TestDatabase;
+import net.bakaar.authz.support.TestIdentityProvider;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -327,6 +345,81 @@ class AdminAuthTest {
     }
 
     @Test
+    void forgedIdTokensAreRejected() {
+        // HS256 with the client secret as MAC key: a key the client knows must never verify an ID token
+        assertCallbackRejected(() -> keycloak.stubRawIdToken(sign(
+                new JWSHeader(JWSAlgorithm.HS256), keycloak.idTokenClaims("ada", "authz-admin").build(),
+                macSigner(FakeKeycloak.CLIENT_SECRET))));
+        // unsigned
+        assertCallbackRejected(() -> keycloak.stubRawIdToken(
+                new PlainJWT(keycloak.idTokenClaims("ada", "authz-admin").build()).serialize()));
+        // RSA key that is not in the JWKS, even with the published key ID
+        RSAKey stranger = TestIdentityProvider.generateKey(TestIdentityProvider.KEY_ID);
+        assertCallbackRejected(() -> keycloak.stubRawIdToken(TestIdentityProvider.sign(
+                keycloak.idTokenClaims("ada", "authz-admin").build(), stranger)));
+        // jku pointing at a JWKS the attacker controls
+        RSAKey attacker = TestIdentityProvider.generateKey("attacker-key");
+        keycloak.wireMock().stubFor(get("/attacker-jwks")
+                .willReturn(okJson(new JWKSet(attacker.toPublicJWK()).toString())));
+        assertCallbackRejected(() -> keycloak.stubRawIdToken(TestIdentityProvider.sign(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("attacker-key")
+                        .jwkURL(URI.create(keycloak.baseUrl() + "/attacker-jwks")).build(),
+                keycloak.idTokenClaims("ada", "authz-admin").build(), attacker)));
+        assertThat(keycloak.wireMock().findAll(getRequestedFor(urlPathEqualTo("/attacker-jwks")))).isEmpty();
+    }
+
+    @Test
+    void cancelledSignInShowsAMessageWithASignInLink() {
+        LoginStart start = AdminClient.startLogin(server.port(), "/admin/login?returnTo=%2Fadmin%2Fapplications");
+
+        Response callback = given().port(server.port()).redirects().follow(false)
+                .cookie(LOGIN_COOKIE, start.loginCookie())
+                .queryParam("error", "access_denied")
+                .queryParam("error_description", "<b>user cancelled</b>")
+                .queryParam("state", start.state())
+                .when().get("/oidc/redirect");
+
+        callback.then().statusCode(400)
+                .header("Cache-Control", "no-store")
+                .header("Content-Type", startsWith("text/html"))
+                .header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
+                .body(containsString("Sign-in was cancelled"))
+                .body(containsString("href=\"/admin/login\""));
+        assertThat(callback.asString()).doesNotContain("user cancelled", "<script>", "style=");
+        assertThat(callback.getHeaders().getValues("Set-Cookie"))
+                .noneMatch(cookie -> cookie.startsWith(SESSION_COOKIE + "="))
+                .anyMatch(cookie -> cookie.startsWith(LOGIN_COOKIE + "=;"));
+    }
+
+    @Test
+    void slowJwksWithinTheHttpTimeoutStillSignsIn() {
+        try (FakeKeycloak slow = new FakeKeycloak();
+             Main.RunningServer offline = Main.start(config(slow.baseUrl(), null))) {
+            slow.delayJwks(Duration.ofMillis(1500));
+
+            String session = AdminClient.sessionCookie(offline.port(), slow, "ada", "authz-admin");
+
+            assertThat(session).isNotBlank();
+        }
+    }
+
+    @Test
+    void badAdminConfigFailsStartupWithoutLeakingTheConnectionPool() {
+        Set<Thread> before = poolHousekeepers();
+        Map<String, String> badKey = new HashMap<>(configValues(keycloak.baseUrl(), null));
+        badKey.put("admin.session-key", "not base64!");
+        Map<String, String> noRedirect = new HashMap<>(configValues(keycloak.baseUrl(), null));
+        noRedirect.remove("admin.oidc.redirect-uri");
+
+        assertThatThrownBy(() -> Main.start(Config.just(ConfigSources.create(badKey))))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("admin.session-key");
+        assertThatThrownBy(() -> Main.start(Config.just(ConfigSources.create(noRedirect))))
+                .isInstanceOf(RuntimeException.class).hasMessageContaining("admin.oidc.redirect-uri");
+
+        assertThat(poolHousekeepers()).as("pools left open by the failed starts").isSubsetOf(before);
+    }
+
+    @Test
     void logoutClearsSessionAndRedirectsToKeycloak() {
         LoginStart start = AdminClient.startLogin(server.port(), "/admin/login");
         AdminClient.visitKeycloak(start);
@@ -404,6 +497,31 @@ class AdminAuthTest {
         return matcher.group(1);
     }
 
+    /** Housekeeper threads of the live Hikari pools: one per pool, alive until the pool is closed. */
+    private static Set<Thread> poolHousekeepers() {
+        return Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> thread.getName().equals("authz:housekeeper"))
+                .collect(Collectors.toSet());
+    }
+
+    private static JWSSigner macSigner(String secret) {
+        try {
+            return new MACSigner(secret.getBytes(StandardCharsets.UTF_8));
+        } catch (JOSEException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String sign(JWSHeader header, JWTClaimsSet claims, JWSSigner signer) {
+        try {
+            SignedJWT jwt = new SignedJWT(header, claims);
+            jwt.sign(signer);
+            return jwt.serialize();
+        } catch (JOSEException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static String setCookie(Response response, String name) {
         return response.getHeaders().getValues("Set-Cookie").stream()
                 .filter(cookie -> cookie.startsWith(name + "="))
@@ -424,6 +542,10 @@ class AdminAuthTest {
      * Without a database, the server starts against an unreachable one, as it does during the AOT training run.
      */
     private static Config config(String keycloakBaseUrl, TestDatabase database) {
+        return Config.just(ConfigSources.create(configValues(keycloakBaseUrl, database)));
+    }
+
+    private static Map<String, String> configValues(String keycloakBaseUrl, TestDatabase database) {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
         Map<String, String> values = new HashMap<>(database == null
@@ -448,6 +570,6 @@ class AdminAuthTest {
                 "admin.oidc.redirect-uri", FakeKeycloak.REDIRECT_URI,
                 "admin.oidc.allow-insecure", "true",
                 "admin.session-key", Base64.getEncoder().encodeToString(key)));
-        return Config.just(ConfigSources.create(values));
+        return values;
     }
 }

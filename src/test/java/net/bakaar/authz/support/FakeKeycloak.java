@@ -11,10 +11,12 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jwt.JWTClaimsSet;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
@@ -34,7 +36,8 @@ public final class FakeKeycloak implements AutoCloseable {
 
     public static final String ISSUER = TestIdentityProvider.ISSUER;
     public static final String CLIENT_ID = "authz-admin-ui";
-    public static final String CLIENT_SECRET = "test-client-secret";
+    /** At least 256 bits, so a test can also forge an HS256 ID token signed with it. */
+    public static final String CLIENT_SECRET = "test-client-secret-0123456789abcdef";
     public static final String REDIRECT_URI = "http://localhost:8080/oidc/redirect";
 
     private final TestIdentityProvider idp = new TestIdentityProvider();
@@ -54,6 +57,14 @@ public final class FakeKeycloak implements AutoCloseable {
         wireMock.stubFor(get(urlPathEqualTo("/auth")).willReturn(ok("login page")));
         wireMock.stubFor(get(urlPathEqualTo("/logout")).willReturn(ok("logged out")));
         wireMock.stubFor(post("/token").willReturn(unauthorized()));
+    }
+
+    /**
+     * Makes the JWKS answer only after this delay, like a slow Keycloak.
+     */
+    public void delayJwks(Duration delay) {
+        wireMock().stubFor(get("/jwks").willReturn(okJson(new JWKSet(idp.signingKey().toPublicJWK()).toString())
+                .withFixedDelay((int) delay.toMillis())));
     }
 
     public String baseUrl() {
@@ -104,7 +115,13 @@ public final class FakeKeycloak implements AutoCloseable {
      * The stub only answers a client_secret_basic request for {@link #CLIENT_ID}.
      */
     public String stubIdToken(JWTClaimsSet claims) {
-        String idToken = idp.sign(claims);
+        return stubRawIdToken(idp.sign(claims));
+    }
+
+    /**
+     * Makes the token endpoint answer with this serialized ID token as is, e.g. a forged one.
+     */
+    public String stubRawIdToken(String idToken) {
         String basic = Base64.getEncoder().encodeToString(
                 (CLIENT_ID + ":" + CLIENT_SECRET).getBytes(StandardCharsets.UTF_8));
         wireMock().stubFor(post("/token")

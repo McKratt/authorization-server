@@ -154,7 +154,9 @@ Sign-in (`LoginRoutes`, `OidcClient`):
 - The flow is authorization code with PKCE S256, `state` and `nonce`, using `client_secret_basic`. Login state lives in the encrypted `AUTHZ_ADMIN_LOGIN` cookie (`Path=/oidc`, 10 minutes).
 - Discovery is fetched lazily on the first `/admin/login` and cached only on success: the server starts without Keycloak, and an unreachable Keycloak gives 503. The discovered `issuer` must equal `admin.oidc.issuer` exactly.
 - The ID token gives the username (`preferred_username`) and the roles (`roles`, a string array). Reads need `authz-admin` or `authz-reader`; writes need `authz-admin`.
-- Logout goes through Keycloak's end-session endpoint with `post_logout_redirect_uri=<origin>/admin`.
+- Logout goes through Keycloak's end-session endpoint with `post_logout_redirect_uri=<origin>/admin` and `id_token_hint` (the raw ID token, kept in the session as the `idt` claim and never printed), so Keycloak ends the SSO session without a confirmation page. Users signed in without an admin role get a 403 page whose only action is this logout.
+- A callback carrying `error` (sign-in cancelled at Keycloak) renders a 400 page with a link to sign in again. The JWKS fetch uses the same 10 s timeout as the other Keycloak calls.
+- Admin configuration (`OidcSettings`, session key) is parsed before the Hikari pool is created, and a failed start closes the pool.
 
 Invariants (keep them):
 - **Session.** It is a stateless encrypted cookie (`AUTHZ_ADMIN_SESSION`, A256GCM, `HttpOnly; SameSite=Lax`, `Secure` unless `admin.cookie-secure=false`). Logout therefore cannot revoke a copied cookie, and role changes in Keycloak apply only at session expiry (8h by default).
