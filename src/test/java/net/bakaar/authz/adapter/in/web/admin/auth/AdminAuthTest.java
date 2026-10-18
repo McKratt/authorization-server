@@ -70,12 +70,33 @@ class AdminAuthTest {
     }
 
     @Test
-    void anonymousHtmxRequestGets401WithHxRedirect() {
+    void anonymousHtmxRequestGets401WithHxRedirectBackToTheCurrentPage() {
+        // the request is a dialog fragment; after sign-in the browser must land on the page that asked for it
         given().port(server.port()).redirects().follow(false)
                 .header("HX-Request", "true")
-                .when().get("/admin/applications")
+                .header("HX-Current-URL", "http://localhost:8080/admin/applications")
+                .when().get("/admin/applications/new")
                 .then().statusCode(401)
+                .header("Cache-Control", "no-store")
                 .header("HX-Redirect", "/admin/login?returnTo=%2Fadmin%2Fapplications");
+    }
+
+    @Test
+    void anonymousHtmxRequestWithoutUsableCurrentUrlReturnsToAdmin() {
+        for (String currentUrl : List.of("", "not a url", "http://localhost:8080/elsewhere",
+                "http://localhost:8080/admin/%2e%2e/x", "http://localhost:8080/admin/../x")) {
+            given().port(server.port()).redirects().follow(false)
+                    .header("HX-Request", "true")
+                    .header("HX-Current-URL", currentUrl)
+                    .when().get("/admin/applications/new")
+                    .then().statusCode(401)
+                    .header("HX-Redirect", "/admin/login?returnTo=%2Fadmin");
+        }
+        given().port(server.port()).redirects().follow(false)
+                .header("HX-Request", "true")
+                .when().get("/admin/applications/new")
+                .then().statusCode(401)
+                .header("HX-Redirect", "/admin/login?returnTo=%2Fadmin");
     }
 
     @Test
@@ -161,7 +182,8 @@ class AdminAuthTest {
 
     @Test
     void returnToOutsideAdminFallsBackToAdmin() {
-        for (String returnTo : List.of("https://evil.example", "//evil.example", "/admin/../../evil", "/administrator")) {
+        for (String returnTo : List.of("https://evil.example", "//evil.example", "/admin/../../evil", "/administrator",
+                "/admin/%2e%2e/x", "/admin/%2F%2Fevil.example")) {
             LoginStart start = AdminClient.startLogin(server.port(),
                     "/admin/login?returnTo=" + URLEncoder.encode(returnTo, StandardCharsets.UTF_8));
             AdminClient.visitKeycloak(start);
