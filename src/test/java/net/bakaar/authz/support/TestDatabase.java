@@ -70,6 +70,21 @@ public final class TestDatabase implements AutoCloseable {
         insertFixtures();
     }
 
+    /**
+     * Runs one update statement with string parameters, e.g. to store a value the admin UI would reject.
+     */
+    public void execute(String sql, String... parameters) {
+        try (Connection connection = DriverManager.getConnection(jdbcUrl(), username(), password());
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int i = 0; i < parameters.length; i++) {
+                statement.setString(i + 1, parameters[i]);
+            }
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to execute " + sql, e);
+        }
+    }
+
     private static long insert(Connection connection, String sql, String name) throws SQLException {
         long id = Ids.next();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {

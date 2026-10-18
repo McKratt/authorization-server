@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import net.bakaar.authz.application.domain.model.UserId;
 import net.bakaar.authz.application.domain.model.Username;
 
 /**
@@ -64,6 +65,16 @@ final class Forms {
             }
         }
         return values;
+    }
+
+    /**
+     * The {@code confirmedUserIds} of a removal: htmx sends DELETE parameters in the query string, other clients
+     * may send a form body, so both are read.
+     */
+    static Set<UserId> confirmedUserIds(ServerRequest request) {
+        Set<UserId> confirmed = new LinkedHashSet<>(ids(request.query(), "confirmedUserIds", UserId::parse));
+        confirmed.addAll(ids(parse(request), "confirmedUserIds", UserId::parse));
+        return confirmed;
     }
 
     /**

@@ -3,14 +3,11 @@ package net.bakaar.authz.adapter.in.web.admin;
 import static net.bakaar.authz.adapter.in.web.admin.AdminPages.model;
 
 import io.helidon.common.parameters.Parameters;
-import io.helidon.http.ForbiddenException;
 import io.helidon.http.Status;
 import io.helidon.webserver.http.HttpRules;
 import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -21,8 +18,6 @@ import net.bakaar.authz.adapter.in.web.admin.auth.AdminAuthFilter;
 import net.bakaar.authz.application.domain.model.ApplicationDetails;
 import net.bakaar.authz.application.domain.model.ApplicationGrants;
 import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.InvalidInputException;
-import net.bakaar.authz.application.domain.model.NameConflictException;
 import net.bakaar.authz.application.domain.model.NotFoundException;
 import net.bakaar.authz.application.domain.model.RoleId;
 import net.bakaar.authz.application.domain.model.RoleSummary;
@@ -73,21 +68,18 @@ public final class UsersRoutes implements HttpService {
     private final ListApplications listApplications;
     private final GetApplication getApplication;
 
-    public UsersRoutes(AdminPages pages, ListUsers listUsers, GetUser getUser, CreateUser createUser,
-                       RenameUser renameUser, DeleteUser deleteUser, GrantRoles grantRoles, RevokeRole revokeRole,
-                       PreviewUserChanges previewUserChanges, ListApplications listApplications,
-                       GetApplication getApplication) {
+    public UsersRoutes(AdminPages pages, UserAdminPorts users, ApplicationAdminPorts applications) {
         this.pages = pages;
-        this.listUsers = listUsers;
-        this.getUser = getUser;
-        this.createUser = createUser;
-        this.renameUser = renameUser;
-        this.deleteUser = deleteUser;
-        this.grantRoles = grantRoles;
-        this.revokeRole = revokeRole;
-        this.previewUserChanges = previewUserChanges;
-        this.listApplications = listApplications;
-        this.getApplication = getApplication;
+        this.listUsers = users.list();
+        this.getUser = users.get();
+        this.createUser = users.create();
+        this.renameUser = users.rename();
+        this.deleteUser = users.delete();
+        this.grantRoles = users.grantRoles();
+        this.revokeRole = users.revokeRole();
+        this.previewUserChanges = users.preview();
+        this.listApplications = applications.list();
+        this.getApplication = applications.get();
     }
 
     @Override
@@ -114,45 +106,33 @@ public final class UsersRoutes implements HttpService {
     // ------------------------------------------------------------------ new user and grant
 
     private void newUserDialog(ServerRequest request, ServerResponse response) {
-        requireWriter(request);
+        AdminPages.requireWriter(request);
         renderGrantForm(request, response, Status.OK_200, null, "", "", Set.of(), Map.of());
     }
 
     private void createUser(ServerRequest request, ServerResponse response) {
         Parameters form = Forms.parse(request);
-        String username = Forms.text(form, "username");
         String applicationId = Forms.text(form, "applicationId");
-        Map<String, String> errors = new LinkedHashMap<>();
-        Username name = null;
-        try {
-            name = Forms.username(form);
-        } catch (IllegalArgumentException e) {
-            errors.put("username", ENTER_USERNAME);
-        }
+        FieldErrors errors = new FieldErrors();
+        Username name = errors.parse("username", ENTER_USERNAME, () -> Forms.username(form));
         ApplicationId application = parseApplication(applicationId, errors);
         Set<RoleId> roles = parseRoles(form, errors);
-        Status status = Status.UNPROCESSABLE_CONTENT_422;
-        if (errors.isEmpty()) {
-            try {
-                createUser.createUser(new CreateUserCommand(name, application, roles));
+        try {
+            if (errors.write(() -> createUser.createUser(new CreateUserCommand(name, application, roles)),
+                    Map.of("username", USERNAME_TAKEN))) {
                 pages.changed(response);
                 return;
-            } catch (InvalidInputException e) {
-                errors.putAll(e.fieldErrors());
-            } catch (NameConflictException e) {
-                errors.put("username", USERNAME_TAKEN);
-                status = Status.CONFLICT_409;
-            } catch (NotFoundException e) {
-                // the application was deleted in the meantime
-                errors.put("applicationId", SELECT_APPLICATION);
             }
+        } catch (NotFoundException e) {
+            // the application was deleted in the meantime
+            errors.add("applicationId", SELECT_APPLICATION);
         }
-        renderGrantForm(request, response, status, null, username, applicationId,
-                Forms.values(form, "roleId"), errors);
+        renderGrantForm(request, response, errors.status(), null, Forms.text(form, "username"), applicationId,
+                Forms.values(form, "roleId"), errors.asMap());
     }
 
     private void grantDialog(ServerRequest request, ServerResponse response) {
-        requireWriter(request);
+        AdminPages.requireWriter(request);
         UserAccess user = getUser.getUser(userId(request));
         renderGrantForm(request, response, Status.OK_200, user, "", "", Set.of(), Map.of());
     }
@@ -161,23 +141,21 @@ public final class UsersRoutes implements HttpService {
         UserId userId = userId(request);
         Parameters form = Forms.parse(request);
         String applicationId = Forms.text(form, "applicationId");
-        Map<String, String> errors = new LinkedHashMap<>();
+        FieldErrors errors = new FieldErrors();
         ApplicationId application = parseApplication(applicationId, errors);
         Set<RoleId> roles = parseRoles(form, errors);
-        if (errors.isEmpty()) {
-            try {
-                grantRoles.grantRoles(new GrantRolesCommand(userId, application, roles));
+        try {
+            if (errors.write(() -> grantRoles.grantRoles(new GrantRolesCommand(userId, application, roles)),
+                    Map.of())) {
                 pages.changed(response);
                 return;
-            } catch (InvalidInputException e) {
-                errors.putAll(e.fieldErrors());
-            } catch (NotFoundException e) {
-                // either the user (getUser below answers 404) or the application is gone
-                errors.put("applicationId", SELECT_APPLICATION);
             }
+        } catch (NotFoundException e) {
+            // either the user (getUser below answers 404) or the application is gone
+            errors.add("applicationId", SELECT_APPLICATION);
         }
-        renderGrantForm(request, response, Status.UNPROCESSABLE_CONTENT_422, getUser.getUser(userId), "",
-                applicationId, Forms.values(form, "roleId"), errors);
+        renderGrantForm(request, response, errors.status(), getUser.getUser(userId), "",
+                applicationId, Forms.values(form, "roleId"), errors.asMap());
     }
 
     /**
@@ -207,22 +185,13 @@ public final class UsersRoutes implements HttpService {
         }
     }
 
-    private static ApplicationId parseApplication(String applicationId, Map<String, String> errors) {
-        try {
-            return ApplicationId.parse(applicationId);
-        } catch (NotFoundException e) {
-            errors.put("applicationId", SELECT_APPLICATION);
-            return null;
-        }
+    private static ApplicationId parseApplication(String applicationId, FieldErrors errors) {
+        return errors.parse("applicationId", SELECT_APPLICATION, () -> ApplicationId.parse(applicationId));
     }
 
-    private static Set<RoleId> parseRoles(Parameters form, Map<String, String> errors) {
-        try {
-            return Forms.ids(form, "roleId", RoleId::parse);
-        } catch (NotFoundException e) {
-            errors.put("roleId", INVALID_ROLES);
-            return Set.of();
-        }
+    private static Set<RoleId> parseRoles(Parameters form, FieldErrors errors) {
+        Set<RoleId> roles = errors.parse("roleId", INVALID_ROLES, () -> Forms.ids(form, "roleId", RoleId::parse));
+        return roles == null ? Set.of() : roles;
     }
 
     // ------------------------------------------------------------------ user dialog, rename and delete
@@ -235,25 +204,14 @@ public final class UsersRoutes implements HttpService {
     private void renameUser(ServerRequest request, ServerResponse response) {
         UserId userId = userId(request);
         Parameters form = Forms.parse(request);
-        Map<String, String> errors = new LinkedHashMap<>();
-        Status status = Status.UNPROCESSABLE_CONTENT_422;
-        Username name = null;
-        try {
-            name = Forms.username(form);
-        } catch (IllegalArgumentException e) {
-            errors.put("username", ENTER_USERNAME);
+        FieldErrors errors = new FieldErrors();
+        Username name = errors.parse("username", ENTER_USERNAME, () -> Forms.username(form));
+        if (errors.write(() -> renameUser.renameUser(userId, name), Map.of("username", USERNAME_TAKEN))) {
+            pages.changed(response);
+            return;
         }
-        if (name != null) {
-            try {
-                renameUser.renameUser(userId, name);
-                pages.changed(response);
-                return;
-            } catch (NameConflictException e) {
-                errors.put("username", USERNAME_TAKEN);
-                status = Status.CONFLICT_409;
-            }
-        }
-        renderUserDialog(request, response, status, getUser.getUser(userId), Forms.text(form, "username"), errors);
+        renderUserDialog(request, response, errors.status(), getUser.getUser(userId), Forms.text(form, "username"),
+                errors.asMap());
     }
 
     private void renderUserDialog(ServerRequest request, ServerResponse response, Status status, UserAccess user,
@@ -266,7 +224,7 @@ public final class UsersRoutes implements HttpService {
     }
 
     private void deleteUserConfirmation(ServerRequest request, ServerResponse response) {
-        requireWriter(request);
+        AdminPages.requireWriter(request);
         UserAccess user = getUser.getUser(userId(request));
         String name = user.username().value();
         pages.render(request, response, "confirm-dialog.jte", model(
@@ -286,7 +244,7 @@ public final class UsersRoutes implements HttpService {
     // ------------------------------------------------------------------ revoke
 
     private void revokeConfirmation(ServerRequest request, ServerResponse response) {
-        requireWriter(request);
+        AdminPages.requireWriter(request);
         UserId userId = userId(request);
         RoleId roleId = roleId(request);
         List<UserSummary> removed = previewUserChanges.usersRemovedByRevoking(userId, roleId);
@@ -296,9 +254,7 @@ public final class UsersRoutes implements HttpService {
     private void revokeRole(ServerRequest request, ServerResponse response) {
         UserId userId = userId(request);
         RoleId roleId = roleId(request);
-        // htmx sends DELETE parameters in the query string; other clients may send a form body
-        Set<UserId> confirmed = new HashSet<>(Forms.ids(request.query(), "confirmedUserIds", UserId::parse));
-        confirmed.addAll(Forms.ids(Forms.parse(request), "confirmedUserIds", UserId::parse));
+        Set<UserId> confirmed = Forms.confirmedUserIds(request);
         try {
             revokeRole.revokeRole(new RevokeRoleCommand(userId, roleId, confirmed));
             pages.changed(response);
@@ -341,12 +297,6 @@ public final class UsersRoutes implements HttpService {
     }
 
     // ------------------------------------------------------------------ helpers
-
-    private static void requireWriter(ServerRequest request) {
-        if (!AdminAuthFilter.session(request).canWrite()) {
-            throw new ForbiddenException("The authz-admin role is required");
-        }
-    }
 
     private static UserId userId(ServerRequest request) {
         return UserId.parse(request.path().pathParameters().get("userId"));

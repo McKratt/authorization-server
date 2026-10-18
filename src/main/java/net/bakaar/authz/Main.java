@@ -19,7 +19,9 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.bakaar.authz.adapter.in.web.admin.AdminPages;
+import net.bakaar.authz.adapter.in.web.admin.ApplicationAdminPorts;
 import net.bakaar.authz.adapter.in.web.admin.ApplicationsRoutes;
+import net.bakaar.authz.adapter.in.web.admin.UserAdminPorts;
 import net.bakaar.authz.adapter.in.web.admin.UsersRoutes;
 import net.bakaar.authz.adapter.in.web.admin.auth.AdminAuthFilter;
 import net.bakaar.authz.adapter.in.web.admin.auth.LoginRoutes;
@@ -107,6 +109,11 @@ public final class Main {
         UserAdminService userAdmin = new UserAdminService(transactions, userStore, applicationStore, grantStore);
         ApplicationAdminService applicationAdmin = new ApplicationAdminService(transactions, applicationStore,
                 grantStore, userStore);
+        UserAdminPorts userPorts = new UserAdminPorts(userAdmin, userAdmin, userAdmin, userAdmin, userAdmin,
+                userAdmin, userAdmin, userAdmin);
+        ApplicationAdminPorts applicationPorts = new ApplicationAdminPorts(applicationAdmin, applicationAdmin,
+                applicationAdmin, applicationAdmin, applicationAdmin, applicationAdmin, applicationAdmin,
+                applicationAdmin, applicationAdmin);
         // precompiled by jte-maven-plugin: rendering needs no Java compiler at runtime
         AdminPages pages = new AdminPages(TemplateEngine.createPrecompiled(ContentType.Html));
         return routing -> routing.addFilter(new AdminAuthFilter(cookies))
@@ -114,9 +121,8 @@ public final class Main {
                         .location("admin-static")
                         .build()))
                 .register(login)
-                .register("/admin/applications", new ApplicationsRoutes(pages, applicationAdmin))
-                .register("/admin", new UsersRoutes(pages, userAdmin, userAdmin, userAdmin, userAdmin, userAdmin,
-                        userAdmin, userAdmin, userAdmin, applicationAdmin, applicationAdmin))
+                .register("/admin/applications", new ApplicationsRoutes(pages, applicationPorts))
+                .register("/admin", new UsersRoutes(pages, userPorts, applicationPorts))
                 // unknown or malformed IDs in admin paths and forms: 404, no body
                 .error(NotFoundException.class, AdminPages::notFound);
     }

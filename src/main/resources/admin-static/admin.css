@@ -462,3 +462,65 @@ dialog .input { width: 100%; }
 }
 
 .access dd { margin: 0; }
+
+/* Applications */
+
+.grid .num { text-align: right; }
+
+dialog.wide { width: min(600px, calc(100vw - 32px)); }
+
+dialog h3 { margin: 4px 0 8px; font-size: 13px; }
+
+textarea.input { resize: vertical; }
+
+.note {
+    margin: 0;
+    color: var(--muted-text);
+    font-size: 12px;
+}
+
+.role-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 6px;
+}
+
+dialog .role-row .input { width: auto; min-width: 0; }
+
+.role-row .role-name { flex: 2; }
+
+.role-row .role-description { flex: 3; }
+
+.role-row .chip-x { padding: 4px 6px; }
+
+.roles .btn.ghost[data-add-role] { margin: 2px 0 12px; }
+
+section.roles { margin-bottom: 12px; }
+
+.count { font-size: 12px; white-space: nowrap; }
+
+.details {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 12px;
+    margin: 0 0 14px;
+}
+
+.details dt { font-weight: 600; }
+
+.details dd { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+
+.role-list {
+    margin: 0 0 14px;
+    padding: 0;
+    list-style: none;
+}
+
+.role-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+}
