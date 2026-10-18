@@ -76,6 +76,19 @@ public class JdbcUserStore implements UserStore {
     }
 
     @Override
+    public boolean lock(UserId id) {
+        try (PreparedStatement statement = transactions.current()
+                .prepareStatement("SELECT id FROM app_user WHERE id = ? FOR UPDATE")) {
+            statement.setLong(1, id.value());
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new PersistenceException("Failed to lock user " + id.value(), e);
+        }
+    }
+
+    @Override
     public Optional<UserAccess> find(UserId id) {
         return query(SELECT_ACCESS.formatted("WHERE u.id = ?"), id.value()).stream().findFirst();
     }

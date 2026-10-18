@@ -16,6 +16,9 @@ public interface UserStore {
 
     boolean delete(UserId id);
 
+    /** Locks the user row until the transaction ends; returns whether the user exists. */
+    boolean lock(UserId id);
+
     Optional<UserAccess> find(UserId id);
 
     /** Sorted by username. */
