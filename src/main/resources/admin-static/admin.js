@@ -59,17 +59,54 @@
         });
     }
 
+    // A form marked data-requires-role can be submitted only with a role ticked; the server checks again.
+    function updateSubmit(form) {
+        if (!form || !form.hasAttribute('data-requires-role')) {
+            return;
+        }
+        var submit = form.querySelector('[type=submit]');
+        if (submit) {
+            submit.disabled = !form.querySelector('input[name=roleId]:checked');
+        }
+    }
+
+    // Choosing an application loads its role checkboxes into the element named by data-role-options.
+    function loadRoleOptions(select) {
+        var target = document.getElementById(select.getAttribute('data-role-options'));
+        if (!target) {
+            return;
+        }
+        if (select.value === '') {
+            target.replaceChildren();
+            updateSubmit(select.form);
+            return;
+        }
+        htmx.ajax('GET', '/admin/applications/' + encodeURIComponent(select.value) + '/role-options',
+            {target: target, swap: 'innerHTML'});
+    }
+
     document.addEventListener('click', function (event) {
         if (event.target.closest('#theme-toggle')) {
             var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
             root.setAttribute('data-theme', next);
             storeTheme(next);
         }
+        if (event.target.closest('[data-close-dialog]')) {
+            closeDialog();
+        }
     });
 
     document.addEventListener('input', function (event) {
         if (event.target.id === 'filter') {
             filterRows(event.target.value);
+        }
+    });
+
+    document.addEventListener('change', function (event) {
+        if (event.target.matches('select[data-role-options]')) {
+            loadRoleOptions(event.target);
+        } else if (event.target.matches('input[name=roleId]')) {
+            updateSubmit(event.target.form);
         }
     });
 
@@ -81,6 +118,8 @@
                 dialog.showModal();
             }
         }
+        // new role checkboxes: none ticked yet
+        updateSubmit(event.detail.target.closest && event.detail.target.closest('form'));
     });
 
     document.addEventListener('authz:close-dialog', closeDialog);

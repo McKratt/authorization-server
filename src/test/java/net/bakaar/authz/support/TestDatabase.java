@@ -56,6 +56,20 @@ public final class TestDatabase implements AutoCloseable {
         }
     }
 
+    /**
+     * Deletes every user, application, role and grant, then inserts the fixtures again.
+     */
+    public void resetFixtures() {
+        try (Connection connection = DriverManager.getConnection(jdbcUrl(), username(), password());
+             PreparedStatement truncate = connection.prepareStatement(
+                     "TRUNCATE user_role, role, application, app_user")) {
+            truncate.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to delete fixtures", e);
+        }
+        insertFixtures();
+    }
+
     private static long insert(Connection connection, String sql, String name) throws SQLException {
         long id = Ids.next();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {

@@ -400,3 +400,65 @@ dialog h2 { margin: 0 0 10px; font-size: 15px; }
     justify-content: flex-end;
     gap: 8px;
 }
+
+.row .spacer { flex: 1; }
+
+.btn:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+}
+
+/* Dialog forms */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.field > label, .roles legend { font-size: 13px; font-weight: 600; }
+
+dialog .input { width: 100%; }
+
+.input[aria-invalid=true] { border-color: var(--danger-text); }
+
+.field-error {
+    margin: 0 0 12px;
+    color: var(--danger-text);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.field > .field-error { margin: 0; }
+
+.roles {
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.roles legend { padding: 0; margin-bottom: 4px; }
+
+.roles p { margin: 2px 0; }
+
+.check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 2px 0;
+}
+
+.check input { accent-color: var(--accent-strong); }
+
+/* What a user may access, in the user dialog */
+
+.access {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 12px;
+    align-items: center;
+    margin: 0 0 14px;
+}
+
+.access dd { margin: 0; }

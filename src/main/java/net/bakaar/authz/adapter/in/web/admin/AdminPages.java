@@ -5,10 +5,13 @@ import gg.jte.TemplateEngine;
 import gg.jte.output.StringOutput;
 import io.helidon.http.HeaderName;
 import io.helidon.http.HeaderNames;
+import io.helidon.http.Status;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
+import java.util.HashMap;
 import java.util.Map;
 import net.bakaar.authz.adapter.in.web.admin.auth.AdminAuthFilter;
+import net.bakaar.authz.application.domain.model.NotFoundException;
 
 /**
  * Renders the precompiled jte templates of the admin UI with the headers every admin page carries.
@@ -20,6 +23,10 @@ public final class AdminPages {
     private static final HeaderName CONTENT_SECURITY_POLICY_HEADER = HeaderNames.create("Content-Security-Policy");
     private static final HeaderName HX_REQUEST = HeaderNames.create("HX-Request");
     private static final HeaderName HX_HISTORY_RESTORE_REQUEST = HeaderNames.create("HX-History-Restore-Request");
+    private static final HeaderName HX_TRIGGER = HeaderNames.create("HX-Trigger");
+
+    /** Reloads the open tab and closes the dialog; {@code authz:changed} first, while the form is still attached. */
+    static final String CHANGED_TRIGGER = "{\"authz:changed\":true,\"authz:close-dialog\":true}";
 
     private final TemplateEngine templates;
 
@@ -39,9 +46,51 @@ public final class AdminPages {
      * Renders one template on its own, e.g. a dialog.
      */
     public void render(ServerRequest request, ServerResponse response, String template, Map<String, Object> model) {
+        render(request, response, Status.OK_200, template, model);
+    }
+
+    /**
+     * Renders one template with a status, e.g. a dialog re-rendered with its errors (422 or 409).
+     */
+    public void render(ServerRequest request, ServerResponse response, Status status, String template,
+                       Map<String, Object> model) {
         StringOutput output = new StringOutput();
         templates.render(template, model, output);
+        response.status(status);
         send(response, output);
+    }
+
+    /**
+     * A dialog write succeeded: 204 without body; htmx closes the dialog and the open tab reloads itself.
+     */
+    public void changed(ServerResponse response) {
+        response.status(Status.NO_CONTENT_204)
+                .header(HX_TRIGGER, CHANGED_TRIGGER)
+                .header(HeaderNames.CACHE_CONTROL, "no-store")
+                .send();
+    }
+
+    /**
+     * Error handler for {@link NotFoundException} (unknown or malformed ID): 404 with no body.
+     */
+    public static void notFound(ServerRequest request, ServerResponse response, NotFoundException exception) {
+        response.status(Status.NOT_FOUND_404)
+                .header(HeaderNames.CACHE_CONTROL, "no-store")
+                .send();
+    }
+
+    /**
+     * A template model from key/value pairs; unlike {@link Map#of}, values may be null.
+     */
+    static Map<String, Object> model(Object... keysAndValues) {
+        if (keysAndValues.length % 2 != 0) {
+            throw new IllegalArgumentException("model needs key/value pairs");
+        }
+        Map<String, Object> model = new HashMap<>();
+        for (int i = 0; i < keysAndValues.length; i += 2) {
+            model.put((String) keysAndValues[i], keysAndValues[i + 1]);
+        }
+        return model;
     }
 
     /**
