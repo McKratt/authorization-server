@@ -1,0 +1,21 @@
+server:
+  port: 8080
+  host: 0.0.0.0
+
+# Override with env vars: DB_URL, DB_USERNAME, DB_PASSWORD, DB_MIGRATE
+db:
+  url: jdbc:postgresql://localhost:5432/authz
+  username: authz
+  password: authz
+  migrate: true
+  pool:
+    max-size: 10
+
+# Trusted identity provider. issuer, jwks-uri and audiences have no default and must be provided
+# (env vars JWT_ISSUER, JWT_JWKS_URI, JWT_AUDIENCES as comma-separated list).
+jwt:
+  # Must be unique and immutable at the IdP, otherwise a user could rename themselves into someone else.
+  username-claim: preferred_username
+  algorithms: [ RS256 ]
+  clock-skew: PT30S
+  allow-insecure-jwks-uri: false

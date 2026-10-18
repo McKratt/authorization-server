@@ -1,0 +1,38 @@
+-- Users known to the authorization server, identified by the username claim of their JWT.
+CREATE TABLE app_user
+(
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    username   VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- Client applications asking for authorizations, identified by their name.
+CREATE TABLE application
+(
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- Roles are scoped to one application: "admin" of app A is unrelated to "admin" of app B.
+CREATE TABLE role
+(
+    id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    application_id BIGINT       NOT NULL REFERENCES application (id) ON DELETE CASCADE,
+    name           VARCHAR(100) NOT NULL,
+    description    TEXT,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CONSTRAINT uk_role_application_name UNIQUE (application_id, name)
+);
+
+-- Grants: a user holds a role (and therefore access to the role's application).
+CREATE TABLE user_role
+(
+    user_id    BIGINT      NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
+    role_id    BIGINT      NOT NULL REFERENCES role (id) ON DELETE CASCADE,
+    granted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, role_id)
+);
+
+CREATE INDEX idx_user_role_role_id ON user_role (role_id);
