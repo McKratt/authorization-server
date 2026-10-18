@@ -34,6 +34,10 @@ import net.bakaar.authz.application.port.out.UserStore;
  * Administers users and their grants. Every use case, reads included, runs in one transaction.
  * A user always holds at least one role: revoking the last one deletes the user, but only when the
  * caller confirmed exactly the user computed inside the same transaction.
+ * <p>
+ * Granting locks the granted roles against deletion before inserting, so a concurrent role or application deletion
+ * either waits and then sees the new grant (and asks to confirm the orphans), or wins and the grant answers 422.
+ * Locks are taken roles first, then the user, like the deletions do.
  */
 public class UserAdminService implements ListUsers, GetUser, CreateUser, RenameUser, DeleteUser, GrantRoles,
         RevokeRole, PreviewUserChanges {
@@ -65,7 +69,7 @@ public class UserAdminService implements ListUsers, GetUser, CreateUser, RenameU
     public UserId createUser(CreateUserCommand command) {
         requireRoles(command.roles());
         return transactions.inTransaction(() -> {
-            requireRolesOfApplication(command.application(), command.roles());
+            lockRolesOfApplication(command.application(), command.roles());
             UserId id = UserId.next();
             users.insert(id, command.username());
             grants.grant(id, command.roles());
@@ -95,11 +99,11 @@ public class UserAdminService implements ListUsers, GetUser, CreateUser, RenameU
     public void grantRoles(GrantRolesCommand command) {
         requireRoles(command.roles());
         transactions.run(() -> {
+            lockRolesOfApplication(command.application(), command.roles());
             // The row lock also makes a concurrent orphan deletion of this user wait for the grant.
             if (!users.lock(command.user())) {
                 throw userNotFound(command.user());
             }
-            requireRolesOfApplication(command.application(), command.roles());
             grants.grant(command.user(), command.roles());
         });
     }
@@ -149,11 +153,12 @@ public class UserAdminService implements ListUsers, GetUser, CreateUser, RenameU
         }
     }
 
-    private void requireRolesOfApplication(ApplicationId application, Set<RoleId> roles) {
+    /** Requires the application, then locks the roles against deletion; all of them must belong to it. */
+    private void lockRolesOfApplication(ApplicationId application, Set<RoleId> roles) {
         if (applications.find(application).isEmpty()) {
             throw new NotFoundException("Application " + application.asString() + " not found");
         }
-        if (!applications.roleIds(application).containsAll(roles)) {
+        if (applications.lockRolesAgainstDeletion(application, roles).size() != roles.size()) {
             throw new InvalidInputException(Map.of("roleId", "Roles must belong to the selected application"));
         }
     }

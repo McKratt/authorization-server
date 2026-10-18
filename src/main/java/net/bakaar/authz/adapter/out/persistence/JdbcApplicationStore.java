@@ -1,5 +1,6 @@
 package net.bakaar.authz.adapter.out.persistence;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -167,15 +168,75 @@ public class JdbcApplicationStore implements ApplicationStore {
         try (PreparedStatement statement = transactions.current()
                 .prepareStatement("SELECT id FROM role WHERE application_id = ?")) {
             statement.setLong(1, app.value());
-            try (ResultSet rs = statement.executeQuery()) {
-                Set<RoleId> ids = new LinkedHashSet<>();
-                while (rs.next()) {
-                    ids.add(new RoleId(rs.getLong(1)));
-                }
-                return ids;
-            }
+            return roleIds(statement);
         } catch (SQLException e) {
             throw new PersistenceException("Failed to load roles of application " + app.value(), e);
+        }
+    }
+
+    @Override
+    public boolean lockAgainstDeletion(ApplicationId id) {
+        return exists("SELECT id FROM application WHERE id = ? FOR KEY SHARE", id.value());
+    }
+
+    @Override
+    public boolean lockForDeletion(ApplicationId id) {
+        return exists("SELECT id FROM application WHERE id = ? FOR UPDATE", id.value());
+    }
+
+    @Override
+    public Set<RoleId> lockRolesAgainstDeletion(ApplicationId app, Set<RoleId> roles) {
+        if (roles.isEmpty()) {
+            return Set.of();
+        }
+        Connection connection = transactions.current();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT id FROM role WHERE application_id = ? AND id = ANY(?) ORDER BY id FOR KEY SHARE")) {
+            statement.setLong(1, app.value());
+            statement.setArray(2, connection.createArrayOf("bigint",
+                    roles.stream().map(RoleId::value).toArray(Long[]::new)));
+            return roleIds(statement);
+        } catch (SQLException e) {
+            throw new PersistenceException("Failed to lock roles of application " + app.value(), e);
+        }
+    }
+
+    @Override
+    public boolean lockRoleForDeletion(ApplicationId app, RoleId role) {
+        return exists("SELECT id FROM role WHERE id = ? AND application_id = ? FOR UPDATE", role.value(), app.value());
+    }
+
+    @Override
+    public Set<RoleId> lockRolesForDeletion(ApplicationId app) {
+        try (PreparedStatement statement = transactions.current().prepareStatement(
+                "SELECT id FROM role WHERE application_id = ? ORDER BY id FOR UPDATE")) {
+            statement.setLong(1, app.value());
+            return roleIds(statement);
+        } catch (SQLException e) {
+            throw new PersistenceException("Failed to lock roles of application " + app.value(), e);
+        }
+    }
+
+    private boolean exists(String sql, long... ids) {
+        try (PreparedStatement statement = transactions.current().prepareStatement(sql)) {
+            for (int i = 0; i < ids.length; i++) {
+                statement.setLong(i + 1, ids[i]);
+            }
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new PersistenceException("Failed to lock row", e);
+        }
+    }
+
+    private static Set<RoleId> roleIds(PreparedStatement statement) throws SQLException {
+        try (ResultSet rs = statement.executeQuery()) {
+            Set<RoleId> ids = new LinkedHashSet<>();
+            while (rs.next()) {
+                ids.add(new RoleId(rs.getLong(1)));
+            }
+            return ids;
         }
     }
 
