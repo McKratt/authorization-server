@@ -1,0 +1,4 @@
+package net.bakaar.authz.application.domain.model;
+
+public record RoleDetails(RoleId id, RoleName name, Description description, int userCount) {
+}
