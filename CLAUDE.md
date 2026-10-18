@@ -11,7 +11,7 @@ mvn package                                   # compile, test, build target/auth
 mvn test -Dtest=AuthorizationApiTest          # single test class
 mvn test -Dtest=AuthorizationApiTest#returns401WithoutToken   # single test method
 java -jar target/authorization-server.jar     # run (port 8080, config in src/main/resources/application.yaml)
-docker build -t authorization-server .        # container image
+mvn package && docker build -t authorization-server .   # image is assembled from target/, so build with Maven first
 ```
 
 Persistence tests start `postgres:18-alpine` through Testcontainers 2.x, so Docker must be running. With Colima (the local setup), Testcontainers needs these two variables, otherwise it fails with `Could not connect to Ryuk at null:...`:
@@ -28,10 +28,17 @@ Base package: `net.bakaar` (application code under `net.bakaar.authz`). Entry po
 ## Container image and Leyden AOT
 
 `Dockerfile` stages:
-1. Maven build.
-2. jlink: builds a custom JRE from `eclipse-temurin:25-jdk-alpine`. Do not use a prebuilt JRE image. The module list comes from `jdeps` over the jar and `libs/*.jar`, plus `jdk.unsupported`.
-3. AOT training: runs on plain `alpine` with the jlinked JRE. It starts the jar with `-XX:AOTCacheOutput=app.aot -Ddb.migrate=false`, calls `/observe/health`, then sends SIGTERM; the JVM writes the cache on exit.
-4. Runtime: plain `alpine` with the same JRE, running `-XX:AOTCache=app.aot`.
+There is no Maven stage: the Dockerfile copies `target/authorization-server.jar` and `target/libs/` from the build context, and `.dockerignore` lets only those two through from `target/`.
+1. jlink: builds a custom JRE from `eclipse-temurin:25-jdk-alpine`. Do not use a prebuilt JRE image. The module list comes from `jdeps` over the jar and `libs/*.jar`, plus `jdk.unsupported`.
+2. AOT training: runs on plain `alpine` with the jlinked JRE. It starts the jar with `-XX:AOTCacheOutput=app.aot -Ddb.migrate=false` and placeholder `jwt.*` settings, calls `/observe/health` and the API without a valid token, then sends SIGTERM; the JVM writes the cache on exit.
+3. Runtime: plain `alpine` with the same JRE, running `-XX:AOTCache=app.aot`.
+
+Base image tags are written directly in each `FROM` line (no `ARG`), so Dependabot can update them.
+
+## CI and dependencies
+
+- `.github/workflows/ci.yml`: on pushes to `main` and on PRs, runs `mvn -B verify` (Testcontainers uses the runner's Docker, no Colima overrides), then builds the image with `docker/build-push-action` using `context: .`. A path context is required: the default git context would not contain `target/`. The image is not pushed.
+- `.github/dependabot.yml`: weekly updates for Maven (minor and patch grouped), Docker and GitHub Actions, assigned to `@McKratt`, with conventional-commit prefixes `build(deps)` / `ci(deps)`. `.github/CODEOWNERS` makes `@McKratt` the required reviewer.
 
 Constraints this imposes:
 - The training and runtime stages must use the same JRE, and the jar plus `libs/` must stay at the same paths. Otherwise the JVM silently ignores the cache. Use `-XX:AOTMode=on` to make a mismatch fail instead of being ignored.
