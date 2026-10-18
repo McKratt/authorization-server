@@ -12,11 +12,15 @@ mvn test -Dtest=AuthorizationApiTest          # single test class
 mvn test -Dtest=AuthorizationApiTest#returns401WithoutToken   # single test method
 java -jar target/authorization-server.jar     # run (port 8080, config in src/main/resources/application.yaml)
 mvn package && docker build -t authorization-server .   # image is assembled from target/, so build with Maven first
+mvn package && docker compose up --build      # local stack: PostgreSQL, Keycloak (localhost:8180), server (localhost:8080)
 ```
 
-Persistence tests start `postgres:18-alpine` through Testcontainers 2.x, so Docker must be running. With Colima (the local setup), Testcontainers needs these two variables, otherwise it fails with `Could not connect to Ryuk at null:...`:
+Templates in `src/main/jte` are precompiled by `jte-maven-plugin` (`generate-sources`) and loaded with `TemplateEngine.createPrecompiled`: the jlinked runtime has no Java compiler, so only `jte-runtime` is a dependency.
+
+Persistence tests start `postgres:18-alpine` through Testcontainers 2.x, so Docker must be running. With Colima (the local setup), Testcontainers needs these three variables, otherwise it cannot find Docker or fails with `Could not connect to Ryuk at null:...`:
 
 ```sh
+export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
 export TESTCONTAINERS_HOST_OVERRIDE=localhost
 export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
 ```
@@ -30,7 +34,7 @@ Base package: `net.bakaar` (application code under `net.bakaar.authz`). Entry po
 `Dockerfile` stages:
 There is no Maven stage: the Dockerfile copies `target/authorization-server.jar` and `target/libs/` from the build context, and `.dockerignore` lets only those two through from `target/`.
 1. jlink: builds a custom JRE from `eclipse-temurin:25-jdk-alpine`. Do not use a prebuilt JRE image. The module list comes from `jdeps` over the jar and `libs/*.jar`, plus `jdk.unsupported`.
-2. AOT training: runs on plain `alpine` with the jlinked JRE. It starts the jar with `-XX:AOTCacheOutput=app.aot -Ddb.migrate=false` and placeholder `jwt.*` settings, calls `/observe/health` and the API without a valid token, then sends SIGTERM; the JVM writes the cache on exit.
+2. AOT training: runs on plain `alpine` with the jlinked JRE. It starts the jar with `-XX:AOTCacheOutput=app.aot -Ddb.migrate=false` and placeholder `jwt.*` and `admin.*` settings (issuer `https://training.invalid`, a zero session key). It calls `/observe/health`, the API without a valid token, `/admin` (which follows the redirect to `/admin/login` and gets 503, since discovery fails), `/admin` with `HX-Request` (401) and `/admin/static/admin.css`. It then sends SIGTERM, and the JVM writes the cache on exit. BusyBox `wget` has no `--max-redirect`. An unknown option fails silently behind `|| true`, so check new training lines in the build log.
 3. Runtime: plain `alpine` with the same JRE, running `-XX:AOTCache=app.aot`.
 
 Base image tags are written directly in each `FROM` line (no `ARG`), so Dependabot can update them.
@@ -45,6 +49,23 @@ Constraints this imposes:
 - **The server must start without a database**: no DB exists during `docker build`. Hikari uses `initializationFailTimeout=-1`, and Flyway is skipped with `db.migrate=false`. Keep any new startup step tolerant of a missing DB.
 - If a new library needs a JDK module that jdeps cannot detect (reflection, `ServiceLoader`), add it next to `jdk.unsupported` in the jlink stage.
 - Broaden the training workload (more endpoints hit in the `RUN` heredoc) as features land, so more classes and profiles are cached.
+
+## Local stack (`compose.yaml`)
+
+- `postgres` (`postgres:18-alpine`), `keycloak` (`quay.io/keycloak/keycloak:26.x`, `start-dev --import-realm`, port 8180) and `authorization-server` (`build: .`, port 8080), which starts once the other two are healthy.
+- The realm `authz` is imported from `docker/keycloak/authz-realm.json`. It contains:
+  - realm roles `authz-admin` / `authz-reader`;
+  - client scope `authz-roles` (realm roles as a flat `roles` claim in ID and access tokens);
+  - client `authz-admin-ui` (code flow, PKCE S256) and `demo-client` (password grant, audience `authz-server`);
+  - users `admin`, `reader`, `alice`.
+
+  Because the file defines `clientScopes`, Keycloak does not create its built-in scopes, so `basic` (sub) and `profile` (`preferred_username`) are defined there too. Without them, tokens have no `preferred_username`.
+- Issuer and back channel: `KC_HOSTNAME=http://localhost:8180` with `KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true`.
+  - The issuer is always `http://localhost:8180/realms/authz`.
+  - Discovery fetched at `http://keycloak:8080` (`ADMIN_OIDC_DISCOVERY_BASE_URL`) returns token and JWKS endpoints on `keycloak:8080`, which the server container can reach.
+  - Authorization and logout endpoints stay on `localhost:8180` for the browser.
+- All secrets in `compose.yaml` and the realm file are committed, local-only dev values.
+- Helidon maps env vars onto dashed keys (`ADMIN_OIDC_CLIENT_ID` → `admin.oidc.client-id`).
 
 ## Purpose
 
@@ -119,6 +140,31 @@ Invariants (covered by `JwtAccessTokenVerifierTest` and `AuthorizationApiTest`; 
   - the exact issuer, at least one configured audience, a mandatory `exp`, and a non-blank string username claim.
 - `jwt.issuer`, `jwt.jwks-uri` and `jwt.audiences` have no defaults. The JWKS URI must be https unless `jwt.allow-insecure-jwks-uri=true` (tests only).
 - Responses carry `Cache-Control: no-store`. Unhandled exceptions return a bare 500 and are only logged. `AccessToken.toString()` is redacted; never log the raw token.
+
+## Admin UI and its invariants
+
+The admin UI is routed only when `admin.oidc.issuer` is set; otherwise a WARNING is logged and `/admin` is not routed. Config under `admin.*`:
+- `admin.oidc.issuer`, `client-id`, `client-secret`, `redirect-uri` (`<origin>/oidc/redirect`);
+- `admin.oidc.discovery-base-url` (optional, defaults to the issuer) and `allow-insecure` (http, local only);
+- `admin.session-key` (base64, 32 bytes, required), `admin.session-duration` (default `PT8H`) and `admin.cookie-secure` (default `true`).
+
+Env vars are the upper-case, underscored keys (`ADMIN_SESSION_KEY`, ...).
+
+Sign-in (`LoginRoutes`, `OidcClient`):
+- The flow is authorization code with PKCE S256, `state` and `nonce`, using `client_secret_basic`. Login state lives in the encrypted `AUTHZ_ADMIN_LOGIN` cookie (`Path=/oidc`, 10 minutes).
+- Discovery is fetched lazily on the first `/admin/login` and cached only on success: the server starts without Keycloak, and an unreachable Keycloak gives 503. The discovered `issuer` must equal `admin.oidc.issuer` exactly.
+- The ID token gives the username (`preferred_username`) and the roles (`roles`, a string array). Reads need `authz-admin` or `authz-reader`; writes need `authz-admin`.
+- Logout goes through Keycloak's end-session endpoint with `post_logout_redirect_uri=<origin>/admin`.
+
+Invariants (keep them):
+- **Session.** It is a stateless encrypted cookie (`AUTHZ_ADMIN_SESSION`, A256GCM, `HttpOnly; SameSite=Lax`, `Secure` unless `admin.cookie-secure=false`). Logout therefore cannot revoke a copied cookie, and role changes in Keycloak apply only at session expiry (8h by default).
+- **CSRF.** Every non-GET `/admin` request needs an `X-CSRF-Token` header that matches the session.
+- **Headers.** `/admin` and `/oidc` responses carry `Cache-Control: no-store`, and `/admin` responses carry a CSP without inline scripts or styles. The htmx history cache is disabled (`historyCacheSize: 0`, `refreshOnHistoryMiss: true` in `htmx-config`).
+- **At least one grant.** Every user always keeps at least one grant.
+  - A change that would orphan users deletes them in the same transaction, but only if the request's `confirmedUserIds` equals the set computed in that transaction. Otherwise nothing changes, and the answer is 409 with a new confirmation dialog.
+  - This relies on PostgreSQL READ COMMITTED plus `SELECT … FOR UPDATE` on the affected users' rows before the orphans are computed.
+
+`docs/openapi.yaml` is the HTTP contract of both surfaces. Keep it in sync with the routes, and lint it with `npx -y @redocly/cli@1.34.5 lint docs/openapi.yaml`.
 
 ## Architecture guidelines
 

@@ -1,0 +1,76 @@
+# Local development stack: PostgreSQL, Keycloak (realm "authz") and the authorization server.
+#   mvn package && docker compose up --build
+#
+# LOCAL USE ONLY. Every password, client secret and the session key below (and in
+# docker/keycloak/authz-realm.json) is a throwaway development value committed in the repository.
+# Never reuse them anywhere else. Keycloak runs in dev mode over plain http.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: authz
+      POSTGRES_USER: authz
+      POSTGRES_PASSWORD: authz # local only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authz -d authz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin # local only (Keycloak console, master realm)
+      # Browsers and token issuers use localhost:8180; containers reach Keycloak at keycloak:8080 and
+      # get back-channel endpoints (token, JWKS) on that host, with the same issuer.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./docker/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      # the image has no curl or wget; health is served on the management port 9000
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  authorization-server:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/authz
+      DB_USERNAME: authz
+      DB_PASSWORD: authz # local only
+      # Authorization API: tokens are issued for localhost:8180, keys are fetched from inside the network.
+      JWT_ISSUER: http://localhost:8180/realms/authz
+      JWT_JWKS_URI: http://keycloak:8080/realms/authz/protocol/openid-connect/certs
+      JWT_AUDIENCES: authz-server
+      JWT_ALLOW_INSECURE_JWKS_URI: "true"
+      # Admin UI
+      ADMIN_OIDC_ISSUER: http://localhost:8180/realms/authz
+      ADMIN_OIDC_DISCOVERY_BASE_URL: http://keycloak:8080/realms/authz
+      ADMIN_OIDC_CLIENT_ID: authz-admin-ui
+      ADMIN_OIDC_CLIENT_SECRET: dev-only-authz-admin-ui-secret # local only, same as in the realm file
+      ADMIN_OIDC_REDIRECT_URI: http://localhost:8080/oidc/redirect
+      ADMIN_OIDC_ALLOW_INSECURE: "true"
+      ADMIN_SESSION_KEY: 657YIVgi6LYk0FQ/b/cPrNKdx/zACOx/U6hKrHsW7x0= # local only; generate with `openssl rand -base64 32`
+      ADMIN_COOKIE_SECURE: "false"
+      TSID_NODE: "1"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/observe/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

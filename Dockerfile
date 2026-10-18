@@ -27,12 +27,16 @@ WORKDIR /app
 COPY target/authorization-server.jar .
 COPY target/libs libs
 # Start the server, exercise it, then SIGTERM it: the JVM writes the cache on exit.
-# No database or identity provider exists during the build: migrations are disabled and the JWT
-# settings are placeholders (only unauthenticated requests are exercised, no JWKS is fetched).
+# No database or identity provider exists during the build: migrations are disabled and the JWT and
+# admin OIDC settings are placeholders (only unauthenticated requests are exercised: no JWKS or OIDC
+# discovery document is fetched, /admin only redirects to /admin/login).
 RUN <<EOF
 set -eu
 java -XX:AOTCacheOutput=app.aot -Ddb.migrate=false \
     -Djwt.issuer=https://training.invalid -Djwt.jwks-uri=https://training.invalid/jwks -Djwt.audiences=training \
+    -Dadmin.oidc.issuer=https://training.invalid -Dadmin.oidc.client-id=training \
+    -Dadmin.oidc.client-secret=training -Dadmin.oidc.redirect-uri=http://localhost:8080/oidc/redirect \
+    -Dadmin.session-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
     -jar authorization-server.jar &
 pid=$!
 for i in $(seq 1 30); do
@@ -44,6 +48,11 @@ for i in $(seq 1 50); do
     wget -q -O /dev/null http://localhost:8080/api/v1/authorizations?application=training || true
     wget -q -O /dev/null --header 'Authorization: Bearer not-a-jwt' \
         http://localhost:8080/api/v1/authorizations?application=training || true
+    # BusyBox wget has no --max-redirect: /admin redirects to /admin/login, whose discovery fetch from
+    # training.invalid fails (503). With HX-Request, /admin answers 401 + HX-Redirect instead.
+    wget -q -O /dev/null http://localhost:8080/admin || true
+    wget -q -O /dev/null --header 'HX-Request: true' http://localhost:8080/admin || true
+    wget -q -O /dev/null http://localhost:8080/admin/static/admin.css || true
 done
 kill -TERM "$pid"
 wait "$pid" || true
