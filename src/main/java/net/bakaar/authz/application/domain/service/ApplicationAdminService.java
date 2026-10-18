@@ -148,8 +148,12 @@ public class ApplicationAdminService implements ListApplications, GetApplication
         return grants.usersLosingAllRoles(removed, Optional.empty());
     }
 
-    /** Previews the orphans, rejects the change unless the caller confirmed exactly those users. */
+    /**
+     * Locks the affected users first, so a concurrent grant change waits and the orphan query sees its outcome,
+     * then rejects the change unless the caller confirmed exactly the orphaned users.
+     */
     private List<UserSummary> requireConfirmed(Set<RoleId> removed, Set<UserId> confirmedRemovals) {
+        grants.lockUsersHolding(removed);
         List<UserSummary> orphans = orphansOf(removed);
         if (!ids(orphans).equals(confirmedRemovals)) {
             throw new UnconfirmedRemovalException(orphans);
