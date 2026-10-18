@@ -3,6 +3,7 @@ package net.bakaar.authz.adapter.out.persistence;
 import java.sql.SQLException;
 import java.util.Map;
 import net.bakaar.authz.application.domain.model.NameConflictException;
+import org.postgresql.util.PSQLException;
 
 /** Translates unique-constraint violations into {@link NameConflictException}. */
 final class UniqueViolations {
@@ -27,7 +28,7 @@ final class UniqueViolations {
     }
 
     private static String constraint(SQLException e) {
-        return e instanceof org.postgresql.util.PSQLException psql && psql.getServerErrorMessage() != null
+        return e instanceof PSQLException psql && psql.getServerErrorMessage() != null
                 ? psql.getServerErrorMessage().getConstraint()
                 : null;
     }

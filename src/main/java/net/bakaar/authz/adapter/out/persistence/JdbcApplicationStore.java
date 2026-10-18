@@ -62,7 +62,13 @@ public class JdbcApplicationStore implements ApplicationStore {
 
     @Override
     public boolean delete(ApplicationId id) {
-        return execute("DELETE FROM application WHERE id = ?", id.value());
+        try (PreparedStatement statement = transactions.current()
+                .prepareStatement("DELETE FROM application WHERE id = ?")) {
+            statement.setLong(1, id.value());
+            return statement.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new PersistenceException("Failed to delete application " + id.value(), e);
+        }
     }
 
     @Override
@@ -191,15 +197,6 @@ public class JdbcApplicationStore implements ApplicationStore {
                 }
                 return roles;
             }
-        }
-    }
-
-    private boolean execute(String sql, long id) {
-        try (PreparedStatement statement = transactions.current().prepareStatement(sql)) {
-            statement.setLong(1, id);
-            return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new PersistenceException("Failed to delete application " + id, e);
         }
     }
 
