@@ -21,6 +21,8 @@ export TESTCONTAINERS_HOST_OVERRIDE=localhost
 export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
 ```
 
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`, `build:`, `ci:`; optional scope, e.g. `feat(api): ...`).
+
 Base package: `net.bakaar` (application code under `net.bakaar.authz`). Entry point: `net.bakaar.authz.Main`; `Main.start(Config)` is what tests call to boot a server (use `server.port=0`).
 
 ## Container image and Leyden AOT
