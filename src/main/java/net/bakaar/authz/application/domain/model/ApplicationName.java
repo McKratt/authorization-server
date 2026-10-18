@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 
 public record ApplicationName(String value) {
 
-    private static final Pattern VALID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,99}");
+    static final Pattern VALID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,99}");
 
     public ApplicationName {
         Objects.requireNonNull(value, "application name must not be null");

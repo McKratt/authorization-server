@@ -13,6 +13,7 @@ CREATE TABLE application
 (
     id          BIGINT PRIMARY KEY,
     name        VARCHAR(100) NOT NULL UNIQUE,
+    responsible VARCHAR(254) NOT NULL,
     description TEXT,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
