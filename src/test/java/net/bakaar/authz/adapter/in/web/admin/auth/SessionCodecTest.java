@@ -13,11 +13,13 @@ class SessionCodecTest {
 
     private static final Instant IN_ONE_HOUR = Instant.now().plus(1, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
 
+    private static final String ID_TOKEN = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhbGljZSJ9.c2lnbmF0dXJl";
+
     private final SessionCodec codec = new SessionCodec(randomKey());
 
     @Test
     void roundTrips() {
-        AdminSession session = new AdminSession("alice", Set.of(AdminRole.ADMIN, AdminRole.READER), "csrf-1", IN_ONE_HOUR);
+        AdminSession session = new AdminSession("alice", Set.of(AdminRole.ADMIN, AdminRole.READER), "csrf-1", ID_TOKEN, IN_ONE_HOUR);
         LoginState login = new LoginState("state-1", "nonce-1", "verifier-1", "/admin/applications", IN_ONE_HOUR);
 
         assertThat(codec.decode(codec.encode(session))).contains(session);
@@ -25,20 +27,29 @@ class SessionCodecTest {
     }
 
     @Test
+    void sessionKeepsTheIdTokenButNeverPrintsIt() {
+        AdminSession session = new AdminSession("alice", Set.of(AdminRole.ADMIN), "csrf-1", ID_TOKEN, IN_ONE_HOUR);
+
+        assertThat(codec.decode(codec.encode(session))).get()
+                .extracting(AdminSession::idToken).isEqualTo(ID_TOKEN);
+        assertThat(session.toString()).doesNotContain(ID_TOKEN).contains("alice");
+    }
+
+    @Test
     void roundTripsASessionWithoutRoles() {
-        AdminSession session = new AdminSession("alice", Set.of(), "csrf-1", IN_ONE_HOUR);
+        AdminSession session = new AdminSession("alice", Set.of(), "csrf-1", ID_TOKEN, IN_ONE_HOUR);
 
         assertThat(codec.decode(codec.encode(session))).contains(session);
     }
 
     @Test
     void tamperedOrExpiredSessionIsIgnored() {
-        String encoded = codec.encode(new AdminSession("alice", Set.of(AdminRole.ADMIN), "csrf-1", IN_ONE_HOUR));
+        String encoded = codec.encode(new AdminSession("alice", Set.of(AdminRole.ADMIN), "csrf-1", ID_TOKEN, IN_ONE_HOUR));
         char[] chars = encoded.toCharArray();
         int middle = encoded.lastIndexOf('.') - 5;
         chars[middle] = chars[middle] == 'A' ? 'B' : 'A';
         String tampered = new String(chars);
-        String expired = codec.encode(new AdminSession("alice", Set.of(AdminRole.ADMIN), "csrf-1",
+        String expired = codec.encode(new AdminSession("alice", Set.of(AdminRole.ADMIN), "csrf-1", ID_TOKEN,
                 Instant.now().minusSeconds(1)));
 
         assertThat(codec.decode(tampered)).isEmpty();
@@ -51,7 +62,7 @@ class SessionCodecTest {
     @Test
     void loginStateIsNeverAcceptedAsSessionAndViceVersa() {
         String login = codec.encode(new LoginState("state-1", "nonce-1", "verifier-1", "/admin", IN_ONE_HOUR));
-        String session = codec.encode(new AdminSession("alice", Set.of(AdminRole.ADMIN), "csrf-1", IN_ONE_HOUR));
+        String session = codec.encode(new AdminSession("alice", Set.of(AdminRole.ADMIN), "csrf-1", ID_TOKEN, IN_ONE_HOUR));
 
         assertThat(codec.decode(login)).isEmpty();
         assertThat(codec.decodeLoginState(session)).isEmpty();
@@ -72,15 +83,15 @@ class SessionCodecTest {
     @Test
     void csrfTokenMustBeBase64Url() {
         for (String token : new String[] {"", "a\"b", "a b", "a+b/c=", "<x>"}) {
-            assertThatThrownBy(() -> new AdminSession("a", Set.of(AdminRole.ADMIN), token, IN_ONE_HOUR))
+            assertThatThrownBy(() -> new AdminSession("a", Set.of(AdminRole.ADMIN), token, ID_TOKEN, IN_ONE_HOUR))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     @Test
     void adminRoleMayWriteAndReaderMayNot() {
-        assertThat(new AdminSession("a", Set.of(AdminRole.ADMIN), "c", IN_ONE_HOUR).canWrite()).isTrue();
-        assertThat(new AdminSession("a", Set.of(AdminRole.READER), "c", IN_ONE_HOUR).canWrite()).isFalse();
+        assertThat(new AdminSession("a", Set.of(AdminRole.ADMIN), "c", ID_TOKEN, IN_ONE_HOUR).canWrite()).isTrue();
+        assertThat(new AdminSession("a", Set.of(AdminRole.READER), "c", ID_TOKEN, IN_ONE_HOUR).canWrite()).isFalse();
     }
 
     private static byte[] randomKey() {

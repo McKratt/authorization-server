@@ -89,19 +89,25 @@ public final class LoginRoutes implements HttpService {
             return;
         }
         cookies.setSession(response, new AdminSession(identity.username(), identity.roles(), randomToken(),
-                Instant.now().plus(sessionDuration)));
+                identity.idToken(), Instant.now().plus(sessionDuration)));
         LOGGER.info(() -> "Admin sign-in: " + identity.username() + " " + identity.roles());
         response.header(HeaderNames.LOCATION, login.returnTo()).status(Status.FOUND_302).send();
     }
 
+    /**
+     * RP-initiated logout: with {@code id_token_hint}, Keycloak ends the SSO session at once instead of asking
+     * "Do you want to log out?", so {@code /admin} cannot silently sign the user back in.
+     */
     private void logout(ServerRequest request, ServerResponse response) {
         response.header(HeaderNames.CACHE_CONTROL, "no-store");
+        AdminSession session = AdminAuthFilter.session(request);
         cookies.clearSession(response);
         String target;
         try {
             Map<String, String> params = new LinkedHashMap<>();
             params.put("client_id", settings.clientId());
             params.put("post_logout_redirect_uri", settings.origin() + HOME);
+            params.put("id_token_hint", session.idToken());
             target = OidcClient.withQuery(oidc.endSessionUri(), params).toString();
         } catch (OidcException e) {
             LOGGER.log(Level.WARNING, () -> "Keycloak logout skipped: " + e.getMessage());

@@ -149,7 +149,7 @@ public class OidcClient {
             if (roleClaims != null) {
                 roleClaims.forEach(role -> AdminRole.fromClaim(role).ifPresent(roles::add));
             }
-            return new AdminIdentity(username, roles);
+            return new AdminIdentity(username, roles, idToken);
         } catch (ParseException e) {
             throw new OidcException("ID token has a malformed preferred_username, azp or roles claim");
         }
