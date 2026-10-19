@@ -136,6 +136,7 @@
                 <configuration>
                     <sourceDirectory>${project.basedir}/src/main/jte</sourceDirectory>
                     <contentType>Html</contentType>
+                    <targetDirectory>${project.build.directory}/classes</targetDirectory>
                 </configuration>
                 <executions>
                     <execution>
