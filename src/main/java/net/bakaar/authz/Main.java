@@ -7,10 +7,12 @@ import io.helidon.config.Config;
 import io.helidon.http.HttpException;
 import io.helidon.http.Status;
 import io.helidon.logging.common.LogConfig;
+import io.helidon.service.registry.Services;
 import io.helidon.webserver.WebServer;
 import io.helidon.webserver.http.HttpRouting;
 import io.helidon.webserver.staticcontent.ClasspathHandlerConfig;
 import io.helidon.webserver.staticcontent.StaticContentFeature;
+
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Base64;
@@ -18,6 +20,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import net.bakaar.authz.adapter.in.web.admin.AdminPages;
 import net.bakaar.authz.adapter.in.web.admin.ApplicationAdminPorts;
 import net.bakaar.authz.adapter.in.web.admin.ApplicationsRoutes;
@@ -54,7 +57,7 @@ public final class Main {
     public static void main(String[] args) {
         LogConfig.configureRuntime();
         Config config = Config.create();
-        Config.global(config);
+        Services.set(Config.class, config);
 
         RunningServer server = start(config);
         Runtime.getRuntime().addShutdownHook(new Thread(server::close));
@@ -78,7 +81,8 @@ public final class Main {
                     new UserRolesPersistenceAdapter(dataSource));
             Consumer<HttpRouting.Builder> adminUi = adminConfig
                     .map(admin -> adminUi(admin, dataSource))
-                    .orElse(routing -> { });
+                    .orElse(routing -> {
+                    });
 
             WebServer webServer = WebServer.builder()
                     .config(config.get("server"))
@@ -159,7 +163,7 @@ public final class Main {
         byte[] key;
         try {
             key = Base64.getDecoder().decode(encoded.trim());
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw new IllegalStateException("admin.session-key must be base64");
         }
         if (key.length != 32) {
@@ -178,7 +182,7 @@ public final class Main {
                         response.status(exception.status()).send())
                 .error(Exception.class, (request, response, exception) -> {
                     // never leak exception details to the caller
-                    LOGGER.log(Level.SEVERE, "Unhandled error on " + request.path().path(), exception);
+                    LOGGER.log(Level.SEVERE, "Unhandled error on %s".formatted(request.path().path()), exception);
                     response.status(Status.INTERNAL_SERVER_ERROR_500).send();
                 });
     }
