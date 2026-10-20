@@ -2,4 +2,5 @@ target
 .idea
 .remember
 *.iml
+.DS_Store
 .superpowers/
