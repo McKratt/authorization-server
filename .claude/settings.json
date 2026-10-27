@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "mckratt-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "McKratt/mk-claude-plugin"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "mk-claude-plugin@mckratt-plugins": true
+  }
+}
