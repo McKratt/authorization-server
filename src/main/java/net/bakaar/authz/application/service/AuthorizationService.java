@@ -1,29 +1,26 @@
-package net.bakaar.authz.application.domain.service;
+package net.bakaar.authz.application.service;
 
 import java.util.Optional;
 import java.util.Set;
-import net.bakaar.authz.application.domain.model.Authorization;
-import net.bakaar.authz.application.domain.model.Role;
-import net.bakaar.authz.application.domain.model.Username;
-import net.bakaar.authz.application.port.in.GetAuthorization;
-import net.bakaar.authz.application.port.in.GetAuthorizationQuery;
-import net.bakaar.authz.application.port.out.LoadUserRoles;
-import net.bakaar.authz.application.port.out.VerifyAccessToken;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.domain.Authorization;
+import net.bakaar.authz.domain.Role;
+import net.bakaar.authz.domain.Username;
+import net.bakaar.authz.application.port.in.AuthorizationLookup;
+import net.bakaar.authz.application.port.in.AuthorizationQuery;
+import net.bakaar.authz.application.port.out.UserRolesFinder;
+import net.bakaar.authz.application.port.out.AccessTokenVerifier;
 
-public class AuthorizationService implements GetAuthorization {
+@RequiredArgsConstructor
+public class AuthorizationService implements AuthorizationLookup {
 
-    private final VerifyAccessToken verifyAccessToken;
-    private final LoadUserRoles loadUserRoles;
-
-    public AuthorizationService(VerifyAccessToken verifyAccessToken, LoadUserRoles loadUserRoles) {
-        this.verifyAccessToken = verifyAccessToken;
-        this.loadUserRoles = loadUserRoles;
-    }
+    private final AccessTokenVerifier accessTokenVerifier;
+    private final UserRolesFinder userRolesFinder;
 
     @Override
-    public Optional<Authorization> getAuthorization(GetAuthorizationQuery query) {
-        Username username = verifyAccessToken.verify(query.accessToken());
-        Set<Role> roles = loadUserRoles.loadRoles(username, query.application());
+    public Optional<Authorization> getAuthorization(AuthorizationQuery query) {
+        Username username = accessTokenVerifier.verify(query.accessToken());
+        Set<Role> roles = userRolesFinder.loadRoles(username, query.application());
         if (roles.isEmpty()) {
             return Optional.empty();
         }

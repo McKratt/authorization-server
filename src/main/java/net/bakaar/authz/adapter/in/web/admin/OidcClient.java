@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JOSEObjectType;
@@ -14,13 +14,13 @@ import com.nimbusds.jose.util.JSONObjectUtils;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.DefaultJWTClaimsVerifier;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
-import java.io.IOException;
+import io.helidon.http.HeaderNames;
+import io.helidon.http.Status;
+import io.helidon.webclient.api.ClientResponseTyped;
+import io.helidon.webclient.api.WebClient;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -33,7 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Authorization code flow with PKCE against Keycloak, as a confidential client (client_secret_basic).
@@ -45,20 +47,16 @@ import java.util.stream.Collectors;
  * exact issuer, the client in {@code aud} (and in {@code azp} when there are several audiences), an {@code exp} in
  * the future, the nonce of the sign-in, and a non-blank {@code preferred_username}.
  */
-public class OidcClient {
+@RequiredArgsConstructor
+class OidcClient {
 
     /** For every call to Keycloak, the JWKS fetch included (Nimbus would otherwise give up after 500 ms). */
-    private static final Duration TIMEOUT = Duration.ofSeconds(10);
+    static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     private final OidcSettings settings;
-    private final HttpClient http;
+    private final WebClient http;
     private final ReentrantLock discoveryLock = new ReentrantLock();
     private volatile Discovery discovery;
-
-    public OidcClient(OidcSettings settings, HttpClient http) {
-        this.settings = settings;
-        this.http = http;
-    }
 
     /**
      * Keycloak's authorization endpoint for this sign-in: code flow, {@code openid} scope, PKCE S256, state and nonce.
@@ -88,20 +86,18 @@ public class OidcClient {
                 "code", code,
                 "redirect_uri", settings.redirectUri().toString(),
                 "code_verifier", login.codeVerifier()));
-        HttpRequest request = HttpRequest.newBuilder(provider.tokenEndpoint())
-                .timeout(TIMEOUT)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .header("Accept", "application/json")
-                .header("Authorization", "Basic " + basicCredentials())
-                .POST(HttpRequest.BodyPublishers.ofString(form))
-                .build();
-        HttpResponse<String> response = send(request, "token endpoint");
-        if (response.statusCode() != 200) {
-            throw new OidcException("Token endpoint answered " + response.statusCode());
+        ClientResponseTyped<String> response = send(() -> http.post()
+                .uri(provider.tokenEndpoint())
+                .header(HeaderNames.CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(HeaderNames.ACCEPT, "application/json")
+                .header(HeaderNames.AUTHORIZATION, "Basic " + basicCredentials())
+                .submit(form, String.class), "token endpoint");
+        if (response.status().code() != Status.OK_200.code()) {
+            throw new OidcException("Token endpoint answered " + response.status().code());
         }
         String idToken;
         try {
-            idToken = JSONObjectUtils.getString(JSONObjectUtils.parse(response.body()), "id_token");
+            idToken = JSONObjectUtils.getString(JSONObjectUtils.parse(response.entity()), "id_token");
         } catch (ParseException e) {
             throw new OidcException("Token endpoint answered an unreadable body");
         }
@@ -174,17 +170,15 @@ public class OidcClient {
     }
 
     private Discovery fetchDiscovery() {
-        HttpRequest request = HttpRequest.newBuilder(settings.discoveryUri())
-                .timeout(TIMEOUT)
-                .header("Accept", "application/json")
-                .GET()
-                .build();
-        HttpResponse<String> response = send(request, "discovery");
-        if (response.statusCode() != 200) {
-            throw new OidcException("Discovery answered " + response.statusCode());
+        ClientResponseTyped<String> response = send(() -> http.get()
+                .uri(settings.discoveryUri())
+                .header(HeaderNames.ACCEPT, "application/json")
+                .request(String.class), "discovery");
+        if (response.status().code() != Status.OK_200.code()) {
+            throw new OidcException("Discovery answered " + response.status().code());
         }
         try {
-            Map<String, Object> document = JSONObjectUtils.parse(response.body());
+            Map<String, Object> document = JSONObjectUtils.parse(response.entity());
             if (!settings.issuer().equals(JSONObjectUtils.getString(document, "issuer"))) {
                 throw new OidcException("Discovery announces another issuer than admin.oidc.issuer");
             }
@@ -212,14 +206,14 @@ public class OidcClient {
         return uri;
     }
 
-    private HttpResponse<String> send(HttpRequest request, String what) {
+    /**
+     * WebClient does not throw on an error status, only when Keycloak cannot be reached or does not answer in time.
+     */
+    private static ClientResponseTyped<String> send(Supplier<ClientResponseTyped<String>> call, String what) {
         try {
-            return http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        } catch (IOException e) {
+            return call.get();
+        } catch (RuntimeException e) {
             throw new OidcException("Could not reach the " + what + ": " + e.getClass().getSimpleName());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new OidcException("Interrupted while calling the " + what);
         }
     }
 

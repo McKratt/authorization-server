@@ -15,21 +15,22 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import net.bakaar.authz.adapter.in.web.admin.auth.AdminAuthFilter;
-import net.bakaar.authz.application.domain.model.ApplicationDetails;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.ApplicationSummary;
-import net.bakaar.authz.application.domain.model.Description;
-import net.bakaar.authz.application.domain.model.Email;
-import net.bakaar.authz.application.domain.model.NewRole;
-import net.bakaar.authz.application.domain.model.NotFoundException;
-import net.bakaar.authz.application.domain.model.RoleDetails;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.RoleName;
-import net.bakaar.authz.application.domain.model.UnconfirmedRemovalException;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.adapter.in.web.admin.AuthorizationAdminAdapterConfiguration.ApplicationAdminPorts;
+import net.bakaar.authz.domain.ApplicationDetails;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.ApplicationSummary;
+import net.bakaar.authz.domain.Description;
+import net.bakaar.authz.domain.Email;
+import net.bakaar.authz.domain.NewRole;
+import net.bakaar.authz.domain.NotFoundException;
+import net.bakaar.authz.domain.RoleDetails;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.RoleName;
+import net.bakaar.authz.domain.UnconfirmedRemovalException;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
 import net.bakaar.authz.application.port.in.CreateApplicationCommand;
 import net.bakaar.authz.application.port.in.UpdateApplicationCommand;
 
@@ -45,7 +46,8 @@ import net.bakaar.authz.application.port.in.UpdateApplicationCommand;
  * Unknown IDs end as 404 through {@link AdminPages#notFound}. The filter guards writes; the GET dialogs that only
  * lead to writes check the admin role here.
  */
-public final class ApplicationsRoutes implements HttpService {
+@RequiredArgsConstructor
+final class ApplicationsController implements HttpService {
 
     static final String NAME_RULE = "Use 1 to 100 letters, digits, '.', '_' or '-', starting with a letter or digit.";
     static final String EMAIL_RULE = "Enter an email address like name@example.com.";
@@ -60,11 +62,6 @@ public final class ApplicationsRoutes implements HttpService {
 
     private final AdminPages pages;
     private final ApplicationAdminPorts applications;
-
-    public ApplicationsRoutes(AdminPages pages, ApplicationAdminPorts applications) {
-        this.pages = pages;
-        this.applications = applications;
-    }
 
     @Override
     public void routing(HttpRules rules) {
@@ -374,11 +371,4 @@ public final class ApplicationsRoutes implements HttpService {
 
     /**
      * Lower-case text the client-side filter matches: the name, the responsible and the role names.
-     */
-    public static String filterText(ApplicationSummary application) {
-        return Stream.concat(Stream.of(application.name().value(), application.responsible().value()),
-                        application.roles().stream().map(role -> role.name().value()))
-                .collect(Collectors.joining(" "))
-                .toLowerCase(Locale.ROOT);
-    }
-}
+     */}

@@ -4,23 +4,22 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
-import net.bakaar.authz.application.port.out.Transactions;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.application.port.out.TransactionRunner;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Binds one connection to the calling (virtual) thread for the duration of a transaction.
  * Stores obtain it through {@link #current()}.
  */
-public class JdbcTransactions implements Transactions {
+@RequiredArgsConstructor
+class JdbcTransactionRunner implements TransactionRunner {
 
     private final DataSource dataSource;
     private final ThreadLocal<Connection> current = new ThreadLocal<>();
 
-    public JdbcTransactions(DataSource dataSource) {
-        this.dataSource = dataSource;
-    }
-
     @Override
-    public <T> T inTransaction(Supplier<T> work) {
+    public <T extends @Nullable Object> T inTransaction(Supplier<T> work) {
         if (current.get() != null) {
             return work.get();
         }

@@ -1,9 +1,9 @@
 package net.bakaar.authz.application.port.in;
 
 import java.util.List;
-import net.bakaar.authz.application.domain.model.ApplicationSummary;
+import net.bakaar.authz.domain.ApplicationSummary;
 
-public interface ListApplications {
+public interface ApplicationListing {
 
     List<ApplicationSummary> listApplications();
 }

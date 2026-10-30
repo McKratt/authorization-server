@@ -3,10 +3,10 @@ package net.bakaar.authz.application.port.out;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import net.bakaar.authz.application.domain.model.UserAccess;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
-import net.bakaar.authz.application.domain.model.Username;
+import net.bakaar.authz.domain.UserAccess;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
+import net.bakaar.authz.domain.Username;
 
 public interface UserStore {
 

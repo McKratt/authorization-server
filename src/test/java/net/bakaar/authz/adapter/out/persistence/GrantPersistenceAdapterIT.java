@@ -11,15 +11,15 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-class JdbcGrantStoreTest {
+class GrantPersistenceAdapterIT {
 
     private StoreFixture fixture;
     private UserId alice;

@@ -1,6 +1,6 @@
 package net.bakaar.authz.application.port.in;
 
-public interface UpdateApplication {
+public interface ApplicationUpdate {
 
     void updateApplication(UpdateApplicationCommand command);
 }

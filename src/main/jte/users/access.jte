@@ -1,7 +1,7 @@
 @import net.bakaar.authz.adapter.in.web.admin.ApplicationColors
-@import net.bakaar.authz.application.domain.model.ApplicationGrants
-@import net.bakaar.authz.application.domain.model.RoleSummary
-@import net.bakaar.authz.application.domain.model.UserAccess
+@import net.bakaar.authz.domain.ApplicationGrants
+@import net.bakaar.authz.domain.RoleSummary
+@import net.bakaar.authz.domain.UserAccess
 @param UserAccess user
 <%-- What a user may access, as application tags with their role chips. --%>
 <dl class="access">

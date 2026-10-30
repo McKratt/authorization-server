@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import io.helidon.http.HeaderNames;
 import io.helidon.http.Status;
@@ -19,15 +19,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import net.bakaar.authz.adapter.in.web.admin.auth.OidcClient.OidcException;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.adapter.in.web.admin.OidcClient.OidcException;
 
 /**
  * Sign-in and sign-out of the admin UI. Register at the routing root: it serves {@code GET /admin/login},
  * {@code GET /oidc/redirect} and {@code POST /admin/logout} (the last one behind {@link AdminAuthFilter}).
  */
-public final class LoginRoutes implements HttpService {
+@RequiredArgsConstructor
+final class LoginController implements HttpService {
 
-    private static final Logger LOGGER = Logger.getLogger(LoginRoutes.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(LoginController.class.getName());
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String HOME = "/admin";
 
@@ -36,15 +38,6 @@ public final class LoginRoutes implements HttpService {
     private final SessionCookies cookies;
     private final Duration sessionDuration;
     private final AuthPages pages;
-
-    public LoginRoutes(OidcClient oidc, OidcSettings settings, SessionCookies cookies, Duration sessionDuration,
-                       AuthPages pages) {
-        this.oidc = oidc;
-        this.settings = settings;
-        this.cookies = cookies;
-        this.sessionDuration = sessionDuration;
-        this.pages = pages;
-    }
 
     @Override
     public void routing(HttpRules rules) {

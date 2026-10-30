@@ -1,8 +1,8 @@
 @import java.util.List
 @import net.bakaar.authz.adapter.in.web.admin.ApplicationColors
-@import net.bakaar.authz.adapter.in.web.admin.ApplicationsRoutes
-@import net.bakaar.authz.application.domain.model.ApplicationSummary
-@import net.bakaar.authz.application.domain.model.RoleSummary
+@import net.bakaar.authz.adapter.in.web.admin.FilterTexts
+@import net.bakaar.authz.domain.ApplicationSummary
+@import net.bakaar.authz.domain.RoleSummary
 @param List<ApplicationSummary> applications
 <%-- Every application, including those nobody uses yet. The name opens the application dialog. --%>
 <div class="card">
@@ -21,7 +21,7 @@
     @endif
     @for(ApplicationSummary application : applications)
         !{String color = ApplicationColors.cssClass(application.id());}
-        <tr data-filter="${ApplicationsRoutes.filterText(application)}">
+        <tr data-filter="${FilterTexts.of(application)}">
             <th scope="row">
                 <button type="button" class="link apptag ${color}" hx-get="/admin/applications/${application.id().asString()}" hx-target="#dialog-slot"><span class="dot" aria-hidden="true"></span>${application.name().value()}</button>
             </th>

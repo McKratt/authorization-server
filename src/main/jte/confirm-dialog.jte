@@ -1,6 +1,6 @@
 @import java.util.List
 @import java.util.stream.Collectors
-@import net.bakaar.authz.application.domain.model.UserSummary
+@import net.bakaar.authz.domain.UserSummary
 @param String title
 @param String message
 @param List<UserSummary> removed

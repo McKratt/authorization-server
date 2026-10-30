@@ -29,15 +29,15 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import java.util.Set;
-import net.bakaar.authz.application.domain.model.AccessToken;
-import net.bakaar.authz.application.domain.model.InvalidAccessTokenException;
-import net.bakaar.authz.application.domain.model.Username;
+import net.bakaar.authz.domain.AccessToken;
+import net.bakaar.authz.domain.InvalidAccessTokenException;
+import net.bakaar.authz.domain.Username;
 import net.bakaar.authz.support.TestIdentityProvider;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-class JwtAccessTokenVerifierTest {
+class JwtAccessTokenVerifierIT {
 
     private static TestIdentityProvider idp;
     private static TestIdentityProvider attacker;

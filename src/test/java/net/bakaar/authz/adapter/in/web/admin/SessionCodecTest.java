@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -9,19 +9,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
-import net.bakaar.authz.application.domain.model.Username;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
+import net.bakaar.authz.domain.Username;
 import net.bakaar.authz.application.port.out.GrantStore;
 
-public class JdbcGrantStore implements GrantStore {
+@RequiredArgsConstructor
+class GrantPersistenceAdapter implements GrantStore {
 
-    private final JdbcTransactions transactions;
-
-    public JdbcGrantStore(JdbcTransactions transactions) {
-        this.transactions = transactions;
-    }
+    private final JdbcTransactionRunner transactions;
 
     @Override
     public void grant(UserId user, Set<RoleId> roles) {

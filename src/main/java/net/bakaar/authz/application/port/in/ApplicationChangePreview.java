@@ -1,11 +1,11 @@
 package net.bakaar.authz.application.port.in;
 
 import java.util.List;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.UserSummary;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.UserSummary;
 
-public interface PreviewApplicationChanges {
+public interface ApplicationChangePreview {
 
     List<UserSummary> usersRemovedByDeletingApplication(ApplicationId id);
 

@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import java.time.Instant;
 import java.util.Objects;

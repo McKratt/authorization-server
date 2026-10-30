@@ -5,15 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Optional;
-import net.bakaar.authz.application.domain.model.NameConflictException;
-import net.bakaar.authz.application.domain.model.UserAccess;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.Username;
+import net.bakaar.authz.domain.NameConflictException;
+import net.bakaar.authz.domain.UserAccess;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.Username;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-class JdbcUserStoreTest {
+class UserPersistenceAdapterIT {
 
     private static StoreFixture fixture;
 

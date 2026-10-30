@@ -1,6 +1,6 @@
 @import java.util.Map
-@import net.bakaar.authz.adapter.in.web.admin.auth.AdminSession
-@import net.bakaar.authz.application.domain.model.UserAccess
+@import net.bakaar.authz.adapter.in.web.admin.AdminSession
+@import net.bakaar.authz.domain.UserAccess
 @param AdminSession session
 @param UserAccess user
 @param String username

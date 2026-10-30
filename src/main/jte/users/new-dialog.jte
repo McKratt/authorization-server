@@ -1,9 +1,9 @@
 @import java.util.List
 @import java.util.Map
 @import java.util.Set
-@import net.bakaar.authz.application.domain.model.ApplicationDetails
-@import net.bakaar.authz.application.domain.model.ApplicationSummary
-@import net.bakaar.authz.application.domain.model.UserAccess
+@import net.bakaar.authz.domain.ApplicationDetails
+@import net.bakaar.authz.domain.ApplicationSummary
+@import net.bakaar.authz.domain.UserAccess
 @param UserAccess user
 @param String username
 @param List<ApplicationSummary> applications

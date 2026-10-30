@@ -1,10 +1,9 @@
-package net.bakaar.authz.application.domain.service;
+package net.bakaar.authz.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
-import com.zaxxer.hikari.HikariDataSource;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
 import java.sql.Connection;
@@ -16,29 +15,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import net.bakaar.authz.adapter.out.persistence.Database;
-import net.bakaar.authz.adapter.out.persistence.JdbcApplicationStore;
-import net.bakaar.authz.adapter.out.persistence.JdbcGrantStore;
-import net.bakaar.authz.adapter.out.persistence.JdbcTransactions;
-import net.bakaar.authz.adapter.out.persistence.JdbcUserStore;
-import net.bakaar.authz.application.domain.model.ApplicationDetails;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.Description;
-import net.bakaar.authz.application.domain.model.Email;
-import net.bakaar.authz.application.domain.model.InvalidInputException;
-import net.bakaar.authz.application.domain.model.NameConflictException;
-import net.bakaar.authz.application.domain.model.NewRole;
-import net.bakaar.authz.application.domain.model.NotFoundException;
-import net.bakaar.authz.application.domain.model.RoleDetails;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.RoleName;
-import net.bakaar.authz.application.domain.model.UnconfirmedRemovalException;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
-import net.bakaar.authz.application.domain.model.Username;
+import net.bakaar.authz.domain.ApplicationDetails;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.Description;
+import net.bakaar.authz.domain.Email;
+import net.bakaar.authz.domain.InvalidInputException;
+import net.bakaar.authz.domain.NameConflictException;
+import net.bakaar.authz.domain.NewRole;
+import net.bakaar.authz.domain.NotFoundException;
+import net.bakaar.authz.domain.RoleDetails;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.RoleName;
+import net.bakaar.authz.domain.UnconfirmedRemovalException;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
+import net.bakaar.authz.domain.Username;
+import net.bakaar.authz.adapter.out.persistence.AuthorizationPersistenceAdapterConfiguration;
 import net.bakaar.authz.application.port.in.CreateApplicationCommand;
 import net.bakaar.authz.application.port.in.UpdateApplicationCommand;
+import net.bakaar.authz.application.port.out.TransactionRunner;
+import net.bakaar.authz.application.port.out.UserStore;
 import net.bakaar.authz.common.Ids;
 import net.bakaar.authz.support.TestDatabase;
 import org.junit.jupiter.api.AfterEach;
@@ -46,32 +43,33 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Test;
 
-class ApplicationAdminServiceTest {
+class ApplicationAdminServiceIT {
 
     private TestDatabase database;
-    private HikariDataSource dataSource;
-    private JdbcTransactions transactions;
-    private JdbcUserStore users;
+    private AuthorizationPersistenceAdapterConfiguration persistence;
+    private TransactionRunner transactions;
+    private UserStore users;
     private ApplicationAdminService service;
 
     @BeforeEach
     void setUp() {
         database = new TestDatabase();
-        dataSource = Database.dataSource(Config.just(ConfigSources.create(Map.of(
+        persistence = new AuthorizationPersistenceAdapterConfiguration(Config.just(ConfigSources.create(Map.of(
                 "url", database.jdbcUrl(),
                 "username", database.username(),
                 "password", database.password()))));
-        Database.migrate(dataSource);
         database.insertFixtures();
-        transactions = new JdbcTransactions(dataSource);
-        users = new JdbcUserStore(transactions);
-        service = new ApplicationAdminService(transactions, new JdbcApplicationStore(transactions),
-                new JdbcGrantStore(transactions), users);
+        transactions = persistence.transactionRunner();
+        users = persistence.userStore();
+        service = new ApplicationAdminService(transactions, persistence.applicationStore(), persistence.grantStore(),
+                users);
     }
 
     @AfterEach
     void tearDown() {
-        dataSource.close();
+        if (persistence != null) {
+            persistence.close();
+        }
         database.close();
     }
 
@@ -94,10 +92,9 @@ class ApplicationAdminServiceTest {
 
     @Test
     void createWithDuplicateRoleNamesIsInvalid() {
-        var command = new CreateApplicationCommand(new ApplicationName("wiki"), new Email("wiki@bakaar.net"),
-                Description.EMPTY, List.of(newRole("editor"), newRole("editor")));
-
-        assertThatThrownBy(() -> service.createApplication(command))
+        // the command rejects itself, so the use case is never reached
+        assertThatThrownBy(() -> service.createApplication(new CreateApplicationCommand(new ApplicationName("wiki"),
+                new Email("wiki@bakaar.net"), Description.EMPTY, List.of(newRole("editor"), newRole("editor")))))
                 .isInstanceOfSatisfying(InvalidInputException.class, e ->
                         assertThat(e.fieldErrors()).containsEntry("roleName", "Role names must be unique"));
         assertThat(service.listApplications()).extracting(a -> a.name().value())

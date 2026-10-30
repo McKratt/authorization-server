@@ -14,30 +14,31 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import net.bakaar.authz.adapter.in.web.admin.auth.AdminAuthFilter;
-import net.bakaar.authz.application.domain.model.ApplicationDetails;
-import net.bakaar.authz.application.domain.model.ApplicationGrants;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.NotFoundException;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.RoleSummary;
-import net.bakaar.authz.application.domain.model.UnconfirmedRemovalException;
-import net.bakaar.authz.application.domain.model.UserAccess;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
-import net.bakaar.authz.application.domain.model.Username;
-import net.bakaar.authz.application.port.in.CreateUser;
+import net.bakaar.authz.adapter.in.web.admin.AuthorizationAdminAdapterConfiguration.ApplicationAdminPorts;
+import net.bakaar.authz.adapter.in.web.admin.AuthorizationAdminAdapterConfiguration.UserAdminPorts;
+import net.bakaar.authz.domain.ApplicationDetails;
+import net.bakaar.authz.domain.ApplicationGrants;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.NotFoundException;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.RoleSummary;
+import net.bakaar.authz.domain.UnconfirmedRemovalException;
+import net.bakaar.authz.domain.UserAccess;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
+import net.bakaar.authz.domain.Username;
+import net.bakaar.authz.application.port.in.UserCreation;
 import net.bakaar.authz.application.port.in.CreateUserCommand;
-import net.bakaar.authz.application.port.in.DeleteUser;
-import net.bakaar.authz.application.port.in.GetApplication;
-import net.bakaar.authz.application.port.in.GetUser;
-import net.bakaar.authz.application.port.in.GrantRoles;
+import net.bakaar.authz.application.port.in.UserDeletion;
+import net.bakaar.authz.application.port.in.ApplicationLookup;
+import net.bakaar.authz.application.port.in.UserLookup;
+import net.bakaar.authz.application.port.in.RoleGranting;
 import net.bakaar.authz.application.port.in.GrantRolesCommand;
-import net.bakaar.authz.application.port.in.ListApplications;
-import net.bakaar.authz.application.port.in.ListUsers;
-import net.bakaar.authz.application.port.in.PreviewUserChanges;
-import net.bakaar.authz.application.port.in.RenameUser;
-import net.bakaar.authz.application.port.in.RevokeRole;
+import net.bakaar.authz.application.port.in.ApplicationListing;
+import net.bakaar.authz.application.port.in.UserListing;
+import net.bakaar.authz.application.port.in.UserChangePreview;
+import net.bakaar.authz.application.port.in.UserRenaming;
+import net.bakaar.authz.application.port.in.RoleRevocation;
 import net.bakaar.authz.application.port.in.RevokeRoleCommand;
 
 /**
@@ -47,7 +48,7 @@ import net.bakaar.authz.application.port.in.RevokeRoleCommand;
  * {@link AdminPages#notFound}. The filter guards writes; the GET dialogs that only lead to writes check the
  * admin role here.
  */
-public final class UsersRoutes implements HttpService {
+final class UsersController implements HttpService {
 
     static final String ENTER_USERNAME = "Enter a username of 1 to 255 characters.";
     static final String USERNAME_TAKEN = "This username is already taken.";
@@ -57,18 +58,18 @@ public final class UsersRoutes implements HttpService {
     private static final String DIALOG_SLOT = "#dialog-slot";
 
     private final AdminPages pages;
-    private final ListUsers listUsers;
-    private final GetUser getUser;
-    private final CreateUser createUser;
-    private final RenameUser renameUser;
-    private final DeleteUser deleteUser;
-    private final GrantRoles grantRoles;
-    private final RevokeRole revokeRole;
-    private final PreviewUserChanges previewUserChanges;
-    private final ListApplications listApplications;
-    private final GetApplication getApplication;
+    private final UserListing listUsers;
+    private final UserLookup getUser;
+    private final UserCreation createUser;
+    private final UserRenaming renameUser;
+    private final UserDeletion deleteUser;
+    private final RoleGranting grantRoles;
+    private final RoleRevocation revokeRole;
+    private final UserChangePreview previewUserChanges;
+    private final ApplicationListing listApplications;
+    private final ApplicationLookup getApplication;
 
-    public UsersRoutes(AdminPages pages, UserAdminPorts users, ApplicationAdminPorts applications) {
+    UsersController(AdminPages pages, UserAdminPorts users, ApplicationAdminPorts applications) {
         this.pages = pages;
         this.listUsers = users.list();
         this.getUser = users.get();
@@ -308,12 +309,4 @@ public final class UsersRoutes implements HttpService {
 
     /**
      * Lower-case text the client-side filter matches: the username, application names and role names.
-     */
-    public static String filterText(UserAccess user) {
-        return Stream.concat(Stream.of(user.username().value()), user.applications().stream()
-                        .flatMap(app -> Stream.concat(Stream.of(app.name().value()),
-                                app.roles().stream().map(role -> role.name().value()))))
-                .collect(Collectors.joining(" "))
-                .toLowerCase(Locale.ROOT);
-    }
-}
+     */}

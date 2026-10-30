@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import io.helidon.http.SetCookie;
 import io.helidon.webserver.http.ServerRequest;
@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Reads and writes the two encrypted cookies of the admin UI.
@@ -19,7 +20,8 @@ import java.util.Optional;
  * Both are {@code HttpOnly; SameSite=Lax}, and {@code Secure} unless {@code admin.cookie-secure=false}.
  * A cookie sent more than once is ignored rather than guessed at.
  */
-public final class SessionCookies {
+@RequiredArgsConstructor
+final class SessionCookies {
 
     static final String SESSION = "AUTHZ_ADMIN_SESSION";
     static final String LOGIN = "AUTHZ_ADMIN_LOGIN";
@@ -28,11 +30,6 @@ public final class SessionCookies {
 
     private final SessionCodec codec;
     private final boolean secure;
-
-    public SessionCookies(SessionCodec codec, boolean secure) {
-        this.codec = codec;
-        this.secure = secure;
-    }
 
     public Optional<AdminSession> session(ServerRequest request) {
         return single(request, SESSION).flatMap(codec::decode);

@@ -6,15 +6,15 @@ import com.zaxxer.hikari.HikariDataSource;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
 import java.util.Map;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.Role;
-import net.bakaar.authz.application.domain.model.Username;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.Role;
+import net.bakaar.authz.domain.Username;
 import net.bakaar.authz.support.TestDatabase;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-class UserRolesPersistenceAdapterTest {
+class UserRolesPersistenceAdapterIT {
 
     private static TestDatabase database;
     private static HikariDataSource dataSource;

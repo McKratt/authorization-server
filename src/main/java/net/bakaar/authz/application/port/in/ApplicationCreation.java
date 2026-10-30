@@ -1,8 +1,8 @@
 package net.bakaar.authz.application.port.in;
 
-import net.bakaar.authz.application.domain.model.ApplicationId;
+import net.bakaar.authz.domain.ApplicationId;
 
-public interface CreateApplication {
+public interface ApplicationCreation {
 
     ApplicationId createApplication(CreateApplicationCommand command);
 }

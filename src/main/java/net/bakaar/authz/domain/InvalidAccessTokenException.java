@@ -1,4 +1,4 @@
-package net.bakaar.authz.application.domain.model;
+package net.bakaar.authz.domain;
 
 /**
  * The access token is malformed, not signed by the trusted identity provider, expired, or not meant for us.

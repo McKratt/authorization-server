@@ -3,9 +3,9 @@ package net.bakaar.authz.application.port.out;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
 
 public interface GrantStore {
 

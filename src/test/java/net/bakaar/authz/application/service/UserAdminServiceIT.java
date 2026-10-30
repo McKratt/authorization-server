@@ -1,9 +1,8 @@
-package net.bakaar.authz.application.domain.service;
+package net.bakaar.authz.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.zaxxer.hikari.HikariDataSource;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
 import java.sql.Connection;
@@ -16,21 +15,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import net.bakaar.authz.adapter.out.persistence.Database;
-import net.bakaar.authz.adapter.out.persistence.JdbcApplicationStore;
-import net.bakaar.authz.adapter.out.persistence.JdbcGrantStore;
-import net.bakaar.authz.adapter.out.persistence.JdbcTransactions;
-import net.bakaar.authz.adapter.out.persistence.JdbcUserStore;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.InvalidInputException;
-import net.bakaar.authz.application.domain.model.NameConflictException;
-import net.bakaar.authz.application.domain.model.NotFoundException;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.UnconfirmedRemovalException;
-import net.bakaar.authz.application.domain.model.UserAccess;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
-import net.bakaar.authz.application.domain.model.Username;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.InvalidInputException;
+import net.bakaar.authz.domain.NameConflictException;
+import net.bakaar.authz.domain.NotFoundException;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.UnconfirmedRemovalException;
+import net.bakaar.authz.domain.UserAccess;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
+import net.bakaar.authz.domain.Username;
+import net.bakaar.authz.adapter.out.persistence.AuthorizationPersistenceAdapterConfiguration;
 import net.bakaar.authz.application.port.in.CreateUserCommand;
 import net.bakaar.authz.application.port.in.GrantRolesCommand;
 import net.bakaar.authz.application.port.in.RevokeRoleCommand;
@@ -40,29 +35,29 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-class UserAdminServiceTest {
+class UserAdminServiceIT {
 
     private TestDatabase database;
-    private HikariDataSource dataSource;
+    private AuthorizationPersistenceAdapterConfiguration persistence;
     private UserAdminService service;
 
     @BeforeEach
     void setUp() {
         database = new TestDatabase();
-        dataSource = Database.dataSource(Config.just(ConfigSources.create(Map.of(
+        persistence = new AuthorizationPersistenceAdapterConfiguration(Config.just(ConfigSources.create(Map.of(
                 "url", database.jdbcUrl(),
                 "username", database.username(),
                 "password", database.password()))));
-        Database.migrate(dataSource);
         database.insertFixtures();
-        JdbcTransactions transactions = new JdbcTransactions(dataSource);
-        service = new UserAdminService(transactions, new JdbcUserStore(transactions),
-                new JdbcApplicationStore(transactions), new JdbcGrantStore(transactions));
+        service = new UserAdminService(persistence.transactionRunner(), persistence.userStore(),
+                persistence.applicationStore(), persistence.grantStore());
     }
 
     @AfterEach
     void tearDown() {
-        dataSource.close();
+        if (persistence != null) {
+            persistence.close();
+        }
         database.close();
     }
 
@@ -79,9 +74,9 @@ class UserAdminServiceTest {
 
     @Test
     void createWithoutRoleIsInvalidAndCreatesNothing() {
-        var command = new CreateUserCommand(new Username("dave"), application("billing"), Set.of());
-
-        assertThatThrownBy(() -> service.createUser(command))
+        // the command rejects itself, so the use case is never reached
+        assertThatThrownBy(() -> service.createUser(
+                new CreateUserCommand(new Username("dave"), application("billing"), Set.of())))
                 .isInstanceOfSatisfying(InvalidInputException.class, e ->
                         assertThat(e.fieldErrors()).containsEntry("roleId", "Select at least one role"));
         assertThat(service.listUsers()).extracting(u -> u.username().value()).doesNotContain("dave");

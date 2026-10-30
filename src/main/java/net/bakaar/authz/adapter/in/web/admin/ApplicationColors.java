@@ -1,6 +1,6 @@
 package net.bakaar.authz.adapter.in.web.admin;
 
-import net.bakaar.authz.application.domain.model.ApplicationId;
+import net.bakaar.authz.domain.ApplicationId;
 
 /**
  * Picks one of the eight application pastels ({@code app-0} … {@code app-7} in {@code admin.css}) from the

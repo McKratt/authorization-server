@@ -1,6 +1,6 @@
 @import java.util.Set
-@import net.bakaar.authz.application.domain.model.ApplicationDetails
-@import net.bakaar.authz.application.domain.model.RoleDetails
+@import net.bakaar.authz.domain.ApplicationDetails
+@import net.bakaar.authz.domain.RoleDetails
 @param ApplicationDetails application
 @param Set<String> checked
 <%-- Role checkboxes of one application, swapped into #role-options when the application changes. --%>

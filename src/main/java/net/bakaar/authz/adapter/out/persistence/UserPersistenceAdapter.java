@@ -10,19 +10,21 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import net.bakaar.authz.application.domain.model.ApplicationGrants;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.RoleName;
-import net.bakaar.authz.application.domain.model.RoleSummary;
-import net.bakaar.authz.application.domain.model.UserAccess;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
-import net.bakaar.authz.application.domain.model.Username;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.domain.ApplicationGrants;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.RoleName;
+import net.bakaar.authz.domain.RoleSummary;
+import net.bakaar.authz.domain.UserAccess;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
+import net.bakaar.authz.domain.Username;
 import net.bakaar.authz.application.port.out.UserStore;
 
-public class JdbcUserStore implements UserStore {
+@RequiredArgsConstructor
+class UserPersistenceAdapter implements UserStore {
 
     private static final String SELECT_ACCESS = """
             SELECT u.id AS user_id, u.username, a.id AS app_id, a.name AS app_name, r.id AS role_id, r.name AS role_name
@@ -34,11 +36,7 @@ public class JdbcUserStore implements UserStore {
             ORDER BY u.username, a.name, r.name
             """;
 
-    private final JdbcTransactions transactions;
-
-    public JdbcUserStore(JdbcTransactions transactions) {
-        this.transactions = transactions;
-    }
+    private final JdbcTransactionRunner transactions;
 
     @Override
     public void insert(UserId id, Username username) {

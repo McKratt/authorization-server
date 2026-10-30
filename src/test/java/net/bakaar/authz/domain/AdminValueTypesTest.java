@@ -1,4 +1,4 @@
-package net.bakaar.authz.application.domain.model;
+package net.bakaar.authz.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

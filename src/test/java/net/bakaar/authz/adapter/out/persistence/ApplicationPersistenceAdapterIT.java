@@ -5,21 +5,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Set;
-import net.bakaar.authz.application.domain.model.ApplicationDetails;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.ApplicationSummary;
-import net.bakaar.authz.application.domain.model.Description;
-import net.bakaar.authz.application.domain.model.Email;
-import net.bakaar.authz.application.domain.model.NameConflictException;
-import net.bakaar.authz.application.domain.model.NewRole;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.RoleName;
+import net.bakaar.authz.domain.ApplicationDetails;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.ApplicationSummary;
+import net.bakaar.authz.domain.Description;
+import net.bakaar.authz.domain.Email;
+import net.bakaar.authz.domain.NameConflictException;
+import net.bakaar.authz.domain.NewRole;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.RoleName;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class JdbcApplicationStoreTest {
+class ApplicationPersistenceAdapterIT {
 
     private StoreFixture fixture;
 

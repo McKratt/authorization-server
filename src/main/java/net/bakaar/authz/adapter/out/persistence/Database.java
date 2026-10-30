@@ -8,7 +8,7 @@ import org.flywaydb.core.Flyway;
 /**
  * Creates the connection pool and applies Flyway migrations from {@code db/migration}.
  */
-public final class Database {
+final class Database {
 
     private Database() {
     }
@@ -17,7 +17,7 @@ public final class Database {
      * Builds the pool without opening a connection, so the server can start while the database is unreachable
      * (required by the AOT training run in the Docker build).
      */
-    public static HikariDataSource dataSource(Config db) {
+    static HikariDataSource dataSource(Config db) {
         HikariConfig hikari = new HikariConfig();
         hikari.setJdbcUrl(db.get("url").asString().get());
         hikari.setUsername(db.get("username").asString().get());
@@ -28,7 +28,7 @@ public final class Database {
         return new HikariDataSource(hikari);
     }
 
-    public static void migrate(HikariDataSource dataSource) {
+    static void migrate(HikariDataSource dataSource) {
         Flyway.configure()
                 .dataSource(dataSource)
                 .load()

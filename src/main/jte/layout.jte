@@ -1,4 +1,4 @@
-@import net.bakaar.authz.adapter.in.web.admin.auth.AdminSession
+@import net.bakaar.authz.adapter.in.web.admin.AdminSession
 @param AdminSession session
 @param String activeTab
 @param gg.jte.Content content

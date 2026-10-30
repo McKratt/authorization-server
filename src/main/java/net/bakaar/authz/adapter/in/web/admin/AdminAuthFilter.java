@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import io.helidon.http.HeaderName;
 import io.helidon.http.HeaderNames;
@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Guards every {@code /admin} path except {@code /admin/login} and {@code /admin/static/**}; anything outside
@@ -32,7 +33,8 @@ import java.util.Optional;
  * </ol>
  * Otherwise the {@link AdminSession} is registered in the request context for the handlers.
  */
-public final class AdminAuthFilter implements Filter {
+@RequiredArgsConstructor
+final class AdminAuthFilter implements Filter {
 
     static final HeaderName HX_REQUEST = HeaderNames.create("HX-Request");
     static final HeaderName HX_REDIRECT = HeaderNames.create("HX-Redirect");
@@ -43,15 +45,10 @@ public final class AdminAuthFilter implements Filter {
     private final SessionCookies cookies;
     private final AuthPages pages;
 
-    public AdminAuthFilter(SessionCookies cookies, AuthPages pages) {
-        this.cookies = cookies;
-        this.pages = pages;
-    }
-
     /**
      * The session the filter admitted; only valid inside handlers of guarded paths.
      */
-    public static AdminSession session(ServerRequest request) {
+    static AdminSession session(ServerRequest request) {
         return request.context().get(AdminSession.class)
                 .orElseThrow(() -> new IllegalStateException("No admin session: path not guarded by AdminAuthFilter"));
     }
@@ -108,7 +105,7 @@ public final class AdminAuthFilter implements Filter {
     private static void redirectToLogin(ServerRequest request, ServerResponse response, String path) {
         Optional<String> returnTo = isHtmx(request) ? currentPagePath(request) : Optional.of(path);
         String login = "/admin/login?returnTo="
-                + URLEncoder.encode(LoginRoutes.safeReturnTo(returnTo), StandardCharsets.UTF_8);
+                + URLEncoder.encode(LoginController.safeReturnTo(returnTo), StandardCharsets.UTF_8);
         if (isHtmx(request)) {
             response.header(HX_REDIRECT, login).status(Status.UNAUTHORIZED_401).send();
         } else {

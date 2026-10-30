@@ -11,10 +11,10 @@ final class StoreFixture implements AutoCloseable {
 
     final TestDatabase database = new TestDatabase();
     final HikariDataSource dataSource;
-    final JdbcTransactions transactions;
-    final JdbcUserStore users;
-    final JdbcApplicationStore applications;
-    final JdbcGrantStore grants;
+    final JdbcTransactionRunner transactions;
+    final UserPersistenceAdapter users;
+    final ApplicationPersistenceAdapter applications;
+    final GrantPersistenceAdapter grants;
 
     StoreFixture() {
         Config db = Config.just(ConfigSources.create(Map.of(
@@ -24,10 +24,10 @@ final class StoreFixture implements AutoCloseable {
         dataSource = Database.dataSource(db);
         Database.migrate(dataSource);
         database.insertFixtures();
-        transactions = new JdbcTransactions(dataSource);
-        users = new JdbcUserStore(transactions);
-        applications = new JdbcApplicationStore(transactions);
-        grants = new JdbcGrantStore(transactions);
+        transactions = new JdbcTransactionRunner(dataSource);
+        users = new UserPersistenceAdapter(transactions);
+        applications = new ApplicationPersistenceAdapter(transactions);
+        grants = new GrantPersistenceAdapter(transactions);
     }
 
     @Override
