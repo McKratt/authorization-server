@@ -16,8 +16,10 @@
     <version>0.1.0-SNAPSHOT</version>
 
     <properties>
+        <!-- The Helidon parent sets 21 (the Helidon 4 minimum). -->
         <maven.compiler.source>25</maven.compiler.source>
-        <mainClass>net.bakaar.authz.Main</mainClass>
+        <maven.compiler.release>25</maven.compiler.release>
+        <mainClass>net.bakaar.authz.AuthorizationServerApplication</mainClass>
 
         <version.lib.rest-assured>6.2.0</version.lib.rest-assured>
         <version.lib.wiremock>3.13.2</version.lib.wiremock>
@@ -29,6 +31,10 @@
         <version.lib.nimbus-jose-jwt>10.10</version.lib.nimbus-jose-jwt>
         <version.lib.tsid>2.1.4</version.lib.tsid>
         <version.lib.jte>3.2.4</version.lib.jte>
+        <version.lib.lombok>1.18.48</version.lib.lombok>
+        <version.lib.jspecify>1.0.1</version.lib.jspecify>
+        <version.lib.archunit>1.5.1</version.lib.archunit>
+        <version.plugin.enforcer>3.6.3</version.plugin.enforcer>
     </properties>
 
     <dependencies>
@@ -43,6 +49,10 @@
         <dependency>
             <groupId>io.helidon.webserver</groupId>
             <artifactId>helidon-webserver-static-content</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.webclient</groupId>
+            <artifactId>helidon-webclient</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.config</groupId>
@@ -96,6 +106,18 @@
         </dependency>
 
         <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${version.lib.lombok}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>${version.lib.jspecify}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
@@ -124,10 +146,66 @@
             <version>${version.lib.testcontainers}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${version.lib.archunit}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${version.plugin.enforcer}</version>
+                <executions>
+                    <execution>
+                        <id>enforce-toolchain</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>[3.10.0,)</version>
+                                </requireMavenVersion>
+                                <requireJavaVersion>
+                                    <version>[25,)</version>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${version.lib.lombok}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- Tests named *IT start the server, a PostgreSQL container or WireMock: they run in the
+                     integration-test phase (mvn verify), after packaging; surefire keeps the fast *Test tests. -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <!-- Precompiles src/main/jte into Java sources: the jlinked runtime has no Java compiler. -->
                 <groupId>gg.jte</groupId>
