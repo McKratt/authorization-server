@@ -14,10 +14,10 @@ import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import java.net.MalformedURLException;
 import java.text.ParseException;
 import java.util.Set;
-import net.bakaar.authz.application.domain.model.AccessToken;
-import net.bakaar.authz.application.domain.model.InvalidAccessTokenException;
-import net.bakaar.authz.application.domain.model.Username;
-import net.bakaar.authz.application.port.out.VerifyAccessToken;
+import net.bakaar.authz.domain.AccessToken;
+import net.bakaar.authz.domain.InvalidAccessTokenException;
+import net.bakaar.authz.domain.Username;
+import net.bakaar.authz.application.port.out.AccessTokenVerifier;
 
 /**
  * Verifies signed JWTs against the identity provider's JWKS.
@@ -27,12 +27,12 @@ import net.bakaar.authz.application.port.out.VerifyAccessToken;
  * a different issuer, none of the accepted audiences, a missing or past {@code exp}, a future {@code nbf},
  * and a missing, non-string or blank username claim.
  */
-public class JwtAccessTokenVerifier implements VerifyAccessToken {
+class JwtAccessTokenVerifier implements AccessTokenVerifier {
 
     private final ConfigurableJWTProcessor<SecurityContext> processor;
     private final String usernameClaim;
 
-    public JwtAccessTokenVerifier(JwtSettings settings) {
+    JwtAccessTokenVerifier(JwtSettings settings) {
         this(settings, remoteJwks(settings));
     }
 

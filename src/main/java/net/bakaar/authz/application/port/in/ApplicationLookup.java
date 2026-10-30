@@ -1,10 +1,10 @@
 package net.bakaar.authz.application.port.in;
 
-import net.bakaar.authz.application.domain.model.ApplicationDetails;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.NotFoundException;
+import net.bakaar.authz.domain.ApplicationDetails;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.NotFoundException;
 
-public interface GetApplication {
+public interface ApplicationLookup {
 
     /** @throws NotFoundException when the application does not exist */
     ApplicationDetails getApplication(ApplicationId id);

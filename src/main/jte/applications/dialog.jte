@@ -2,9 +2,9 @@
 @import java.util.Map
 @import net.bakaar.authz.adapter.in.web.admin.ApplicationColors
 @import net.bakaar.authz.adapter.in.web.admin.RoleInput
-@import net.bakaar.authz.adapter.in.web.admin.auth.AdminSession
-@import net.bakaar.authz.application.domain.model.ApplicationDetails
-@import net.bakaar.authz.application.domain.model.RoleDetails
+@import net.bakaar.authz.adapter.in.web.admin.AdminSession
+@import net.bakaar.authz.domain.ApplicationDetails
+@import net.bakaar.authz.domain.RoleDetails
 @param AdminSession session
 @param ApplicationDetails application
 @param Map<String, String> values

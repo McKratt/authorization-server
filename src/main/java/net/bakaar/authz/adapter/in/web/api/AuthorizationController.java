@@ -12,13 +12,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import net.bakaar.authz.application.domain.model.AccessToken;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.Authorization;
-import net.bakaar.authz.application.domain.model.InvalidAccessTokenException;
-import net.bakaar.authz.application.domain.model.Role;
-import net.bakaar.authz.application.port.in.GetAuthorization;
-import net.bakaar.authz.application.port.in.GetAuthorizationQuery;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.domain.AccessToken;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.Authorization;
+import net.bakaar.authz.domain.InvalidAccessTokenException;
+import net.bakaar.authz.domain.Role;
+import net.bakaar.authz.application.port.in.AuthorizationLookup;
+import net.bakaar.authz.application.port.in.AuthorizationQuery;
 
 /**
  * {@code GET ?application=<name>} with {@code Authorization: Bearer <jwt>}.
@@ -30,17 +31,14 @@ import net.bakaar.authz.application.port.in.GetAuthorizationQuery;
  * </ul>
  * There is deliberately no way to name the user: it comes from the verified token only.
  */
-public class AuthorizationApi implements HttpService {
+@RequiredArgsConstructor
+class AuthorizationController implements HttpService {
 
-    private static final Logger LOGGER = Logger.getLogger(AuthorizationApi.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(AuthorizationController.class.getName());
     private static final String BEARER_PREFIX = "bearer ";
     private static final String APPLICATION_PARAM = "application";
 
-    private final GetAuthorization getAuthorization;
-
-    public AuthorizationApi(GetAuthorization getAuthorization) {
-        this.getAuthorization = getAuthorization;
-    }
+    private final AuthorizationLookup getAuthorization;
 
     @Override
     public void routing(HttpRules rules) {
@@ -62,7 +60,7 @@ public class AuthorizationApi implements HttpService {
         }
 
         try {
-            getAuthorization.getAuthorization(new GetAuthorizationQuery(accessToken.get(), application.get()))
+            getAuthorization.getAuthorization(new AuthorizationQuery(accessToken.get(), application.get()))
                     .ifPresentOrElse(
                             authorization -> response.send(toJson(authorization)),
                             () -> error(response, Status.NOT_FOUND_404, "not_found"));

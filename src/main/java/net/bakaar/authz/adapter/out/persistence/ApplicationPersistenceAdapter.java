@@ -12,26 +12,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import net.bakaar.authz.application.domain.model.ApplicationDetails;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.ApplicationSummary;
-import net.bakaar.authz.application.domain.model.Description;
-import net.bakaar.authz.application.domain.model.Email;
-import net.bakaar.authz.application.domain.model.NewRole;
-import net.bakaar.authz.application.domain.model.RoleDetails;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.RoleName;
-import net.bakaar.authz.application.domain.model.RoleSummary;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.domain.ApplicationDetails;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.ApplicationSummary;
+import net.bakaar.authz.domain.Description;
+import net.bakaar.authz.domain.Email;
+import net.bakaar.authz.domain.NewRole;
+import net.bakaar.authz.domain.RoleDetails;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.RoleName;
+import net.bakaar.authz.domain.RoleSummary;
 import net.bakaar.authz.application.port.out.ApplicationStore;
 
-public class JdbcApplicationStore implements ApplicationStore {
+@RequiredArgsConstructor
+class ApplicationPersistenceAdapter implements ApplicationStore {
 
-    private final JdbcTransactions transactions;
-
-    public JdbcApplicationStore(JdbcTransactions transactions) {
-        this.transactions = transactions;
-    }
+    private final JdbcTransactionRunner transactions;
 
     @Override
     public void insert(ApplicationId id, ApplicationName name, Email responsible, Description description) {

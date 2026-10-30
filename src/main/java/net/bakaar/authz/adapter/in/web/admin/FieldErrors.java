@@ -4,9 +4,9 @@ import io.helidon.http.Status;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
-import net.bakaar.authz.application.domain.model.InvalidInputException;
-import net.bakaar.authz.application.domain.model.NameConflictException;
-import net.bakaar.authz.application.domain.model.NotFoundException;
+import net.bakaar.authz.domain.InvalidInputException;
+import net.bakaar.authz.domain.NameConflictException;
+import net.bakaar.authz.domain.NotFoundException;
 
 /**
  * Field messages of one dialog submission and the status its re-render answers with: 422 for invalid input,

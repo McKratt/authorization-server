@@ -1,4 +1,4 @@
-package net.bakaar.authz.application.domain.model;
+package net.bakaar.authz.domain;
 
 import net.bakaar.authz.common.Ids;
 

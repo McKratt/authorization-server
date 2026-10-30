@@ -1,16 +1,16 @@
-package net.bakaar.authz.application.domain.service;
+package net.bakaar.authz.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Set;
-import net.bakaar.authz.application.domain.model.AccessToken;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.Authorization;
-import net.bakaar.authz.application.domain.model.InvalidAccessTokenException;
-import net.bakaar.authz.application.domain.model.Role;
-import net.bakaar.authz.application.domain.model.Username;
-import net.bakaar.authz.application.port.in.GetAuthorizationQuery;
+import net.bakaar.authz.domain.AccessToken;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.Authorization;
+import net.bakaar.authz.domain.InvalidAccessTokenException;
+import net.bakaar.authz.domain.Role;
+import net.bakaar.authz.domain.Username;
+import net.bakaar.authz.application.port.in.AuthorizationQuery;
 import org.junit.jupiter.api.Test;
 
 class AuthorizationServiceTest {
@@ -25,7 +25,7 @@ class AuthorizationServiceTest {
                         ? Set.of(new Role("admin"))
                         : Set.of());
 
-        assertThat(service.getAuthorization(new GetAuthorizationQuery(new AccessToken("t"), BILLING)))
+        assertThat(service.getAuthorization(new AuthorizationQuery(new AccessToken("t"), BILLING)))
                 .contains(new Authorization(new Username("alice"), BILLING, Set.of(new Role("admin"))));
     }
 
@@ -33,7 +33,7 @@ class AuthorizationServiceTest {
     void returnsEmptyWhenUserHasNoRole() {
         AuthorizationService service = new AuthorizationService(token -> new Username("alice"), (u, a) -> Set.of());
 
-        assertThat(service.getAuthorization(new GetAuthorizationQuery(new AccessToken("t"), BILLING))).isEmpty();
+        assertThat(service.getAuthorization(new AuthorizationQuery(new AccessToken("t"), BILLING))).isEmpty();
     }
 
     @Test
@@ -46,7 +46,7 @@ class AuthorizationServiceTest {
                     throw new AssertionError("roles must not be loaded for an invalid token");
                 });
 
-        assertThatThrownBy(() -> service.getAuthorization(new GetAuthorizationQuery(new AccessToken("t"), BILLING)))
+        assertThatThrownBy(() -> service.getAuthorization(new AuthorizationQuery(new AccessToken("t"), BILLING)))
                 .isInstanceOf(InvalidAccessTokenException.class);
     }
 

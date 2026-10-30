@@ -2,7 +2,7 @@ package net.bakaar.authz.adapter.out.persistence;
 
 import java.sql.SQLException;
 import java.util.Map;
-import net.bakaar.authz.application.domain.model.NameConflictException;
+import net.bakaar.authz.domain.NameConflictException;
 import org.postgresql.util.PSQLException;
 
 /** Translates unique-constraint violations into {@link NameConflictException}. */

@@ -7,12 +7,14 @@ import java.sql.SQLException;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import javax.sql.DataSource;
-import net.bakaar.authz.application.domain.model.ApplicationName;
-import net.bakaar.authz.application.domain.model.Role;
-import net.bakaar.authz.application.domain.model.Username;
-import net.bakaar.authz.application.port.out.LoadUserRoles;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.domain.ApplicationName;
+import net.bakaar.authz.domain.Role;
+import net.bakaar.authz.domain.Username;
+import net.bakaar.authz.application.port.out.UserRolesFinder;
 
-public class UserRolesPersistenceAdapter implements LoadUserRoles {
+@RequiredArgsConstructor
+class UserRolesPersistenceAdapter implements UserRolesFinder {
 
     private static final String SELECT_ROLES = """
             SELECT r.name
@@ -26,10 +28,6 @@ public class UserRolesPersistenceAdapter implements LoadUserRoles {
             """;
 
     private final DataSource dataSource;
-
-    public UserRolesPersistenceAdapter(DataSource dataSource) {
-        this.dataSource = dataSource;
-    }
 
     @Override
     public Set<Role> loadRoles(Username username, ApplicationName application) {

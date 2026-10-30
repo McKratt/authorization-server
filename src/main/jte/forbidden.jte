@@ -1,4 +1,4 @@
-@import net.bakaar.authz.adapter.in.web.admin.auth.AdminSession
+@import net.bakaar.authz.adapter.in.web.admin.AdminSession
 @param AdminSession session
 <%-- Signed in, but with neither admin role: the only way out is signing out (to switch account). --%>
 <!doctype html>

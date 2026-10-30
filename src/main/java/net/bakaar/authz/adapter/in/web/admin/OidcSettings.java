@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import io.helidon.config.Config;
 import java.net.URI;
@@ -17,7 +17,7 @@ import java.util.Optional;
  *                         unless the server reaches Keycloak through another (internal) address
  * @param allowInsecure    allows http for the issuer, the discovery URL and the discovered back-channel endpoints
  */
-public record OidcSettings(String issuer,
+record OidcSettings(String issuer,
                            String clientId,
                            String clientSecret,
                            URI redirectUri,
@@ -42,7 +42,7 @@ public record OidcSettings(String issuer,
     /**
      * Empty when {@code admin.oidc.issuer} is not configured: the admin UI is then disabled.
      */
-    public static Optional<OidcSettings> fromConfig(Config admin) {
+    static Optional<OidcSettings> fromConfig(Config admin) {
         Config oidc = admin.get("oidc");
         Optional<String> issuer = oidc.get("issuer").asString().asOptional().filter(value -> !value.isBlank());
         if (issuer.isEmpty()) {

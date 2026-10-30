@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import com.nimbusds.jose.EncryptionMethod;
 import com.nimbusds.jose.JOSEException;
@@ -26,7 +26,7 @@ import javax.crypto.spec.SecretKeySpec;
  * Expiry is stored with second precision. {@code decode} answers empty for anything it cannot trust: a malformed or
  * tampered value, another key, another kind, or a past expiry.
  */
-public final class SessionCodec {
+final class SessionCodec {
 
     private static final JWEHeader HEADER = new JWEHeader(JWEAlgorithm.DIR, EncryptionMethod.A256GCM);
     private static final String KIND = "kind";
@@ -35,7 +35,7 @@ public final class SessionCodec {
 
     private final SecretKey key;
 
-    public SessionCodec(byte[] key) {
+    SessionCodec(byte[] key) {
         if (key == null || key.length != 32) {
             throw new IllegalArgumentException("The session key must be 32 bytes");
         }

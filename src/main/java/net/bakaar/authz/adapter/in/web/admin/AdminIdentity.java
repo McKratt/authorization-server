@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import java.util.Objects;
 import java.util.Set;
@@ -8,7 +8,7 @@ import java.util.Set;
  *
  * @param idToken the raw ID token, kept for the logout hint; never printed
  */
-public record AdminIdentity(String username, Set<AdminRole> roles, String idToken) {
+record AdminIdentity(String username, Set<AdminRole> roles, String idToken) {
 
     public AdminIdentity {
         Objects.requireNonNull(username, "username");

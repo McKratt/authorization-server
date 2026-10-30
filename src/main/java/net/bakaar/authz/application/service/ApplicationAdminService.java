@@ -1,35 +1,32 @@
-package net.bakaar.authz.application.domain.service;
+package net.bakaar.authz.application.service;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import net.bakaar.authz.application.domain.model.ApplicationDetails;
-import net.bakaar.authz.application.domain.model.ApplicationId;
-import net.bakaar.authz.application.domain.model.ApplicationSummary;
-import net.bakaar.authz.application.domain.model.InvalidInputException;
-import net.bakaar.authz.application.domain.model.NewRole;
-import net.bakaar.authz.application.domain.model.NotFoundException;
-import net.bakaar.authz.application.domain.model.RoleId;
-import net.bakaar.authz.application.domain.model.UnconfirmedRemovalException;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.UserSummary;
-import net.bakaar.authz.application.port.in.AddRole;
-import net.bakaar.authz.application.port.in.CreateApplication;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.domain.ApplicationDetails;
+import net.bakaar.authz.domain.ApplicationId;
+import net.bakaar.authz.domain.ApplicationSummary;
+import net.bakaar.authz.domain.NewRole;
+import net.bakaar.authz.domain.NotFoundException;
+import net.bakaar.authz.domain.RemovalConfirmation;
+import net.bakaar.authz.domain.RoleId;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.UserSummary;
+import net.bakaar.authz.application.port.in.RoleAddition;
+import net.bakaar.authz.application.port.in.ApplicationCreation;
 import net.bakaar.authz.application.port.in.CreateApplicationCommand;
-import net.bakaar.authz.application.port.in.DeleteApplication;
-import net.bakaar.authz.application.port.in.DeleteRole;
-import net.bakaar.authz.application.port.in.GetApplication;
-import net.bakaar.authz.application.port.in.ListApplications;
-import net.bakaar.authz.application.port.in.PreviewApplicationChanges;
-import net.bakaar.authz.application.port.in.UpdateApplication;
+import net.bakaar.authz.application.port.in.ApplicationDeletion;
+import net.bakaar.authz.application.port.in.RoleDeletion;
+import net.bakaar.authz.application.port.in.ApplicationLookup;
+import net.bakaar.authz.application.port.in.ApplicationListing;
+import net.bakaar.authz.application.port.in.ApplicationChangePreview;
+import net.bakaar.authz.application.port.in.ApplicationUpdate;
 import net.bakaar.authz.application.port.in.UpdateApplicationCommand;
-import net.bakaar.authz.application.port.in.UpdateRole;
+import net.bakaar.authz.application.port.in.RoleUpdate;
 import net.bakaar.authz.application.port.out.ApplicationStore;
 import net.bakaar.authz.application.port.out.GrantStore;
-import net.bakaar.authz.application.port.out.Transactions;
+import net.bakaar.authz.application.port.out.TransactionRunner;
 import net.bakaar.authz.application.port.out.UserStore;
 
 /**
@@ -41,21 +38,14 @@ import net.bakaar.authz.application.port.out.UserStore;
  * roles being added concurrently, which lock what they reference against deletion, are committed and counted
  * before the orphans are computed.
  */
-public class ApplicationAdminService implements ListApplications, GetApplication, CreateApplication,
-        UpdateApplication, DeleteApplication, AddRole, UpdateRole, DeleteRole, PreviewApplicationChanges {
+@RequiredArgsConstructor
+public class ApplicationAdminService implements ApplicationListing, ApplicationLookup, ApplicationCreation,
+        ApplicationUpdate, ApplicationDeletion, RoleAddition, RoleUpdate, RoleDeletion, ApplicationChangePreview {
 
-    private final Transactions transactions;
+    private final TransactionRunner transactions;
     private final ApplicationStore applications;
     private final GrantStore grants;
     private final UserStore users;
-
-    public ApplicationAdminService(Transactions transactions, ApplicationStore applications, GrantStore grants,
-                                   UserStore users) {
-        this.transactions = transactions;
-        this.applications = applications;
-        this.grants = grants;
-        this.users = users;
-    }
 
     @Override
     public List<ApplicationSummary> listApplications() {
@@ -69,12 +59,6 @@ public class ApplicationAdminService implements ListApplications, GetApplication
 
     @Override
     public ApplicationId createApplication(CreateApplicationCommand command) {
-        Set<String> names = new HashSet<>();
-        for (NewRole role : command.roles()) {
-            if (!names.add(role.name().value())) {
-                throw new InvalidInputException(Map.of("roleName", "Role names must be unique"));
-            }
-        }
         return transactions.inTransaction(() -> {
             ApplicationId id = ApplicationId.next();
             applications.insert(id, command.name(), command.responsible(), command.description());
@@ -99,9 +83,9 @@ public class ApplicationAdminService implements ListApplications, GetApplication
                 throw applicationNotFound(id);
             }
             Set<RoleId> removed = applications.lockRolesForDeletion(id);
-            List<UserSummary> orphans = requireConfirmed(removed, confirmedRemovals);
+            Set<UserId> orphans = requireConfirmed(removed, confirmedRemovals);
             applications.delete(id);
-            users.deleteUsersWithoutRoles(ids(orphans));
+            users.deleteUsersWithoutRoles(orphans);
         });
     }
 
@@ -132,9 +116,9 @@ public class ApplicationAdminService implements ListApplications, GetApplication
             if (!applications.lockRoleForDeletion(app, role)) {
                 throw roleNotFound(app, role);
             }
-            List<UserSummary> orphans = requireConfirmed(Set.of(role), confirmedRemovals);
+            Set<UserId> orphans = requireConfirmed(Set.of(role), confirmedRemovals);
             applications.deleteRole(app, role);
-            users.deleteUsersWithoutRoles(ids(orphans));
+            users.deleteUsersWithoutRoles(orphans);
         });
     }
 
@@ -158,14 +142,12 @@ public class ApplicationAdminService implements ListApplications, GetApplication
     /**
      * With the removed roles already locked, locks the affected users, so a concurrent grant change waits and the
      * orphan query sees its outcome, then rejects the change unless the caller confirmed exactly the orphaned users.
+     *
+     * @return the ids of the orphaned users
      */
-    private List<UserSummary> requireConfirmed(Set<RoleId> removed, Set<UserId> confirmedRemovals) {
+    private Set<UserId> requireConfirmed(Set<RoleId> removed, Set<UserId> confirmedRemovals) {
         grants.lockUsersHolding(removed);
-        List<UserSummary> orphans = orphansOf(removed);
-        if (!ids(orphans).equals(confirmedRemovals)) {
-            throw new UnconfirmedRemovalException(orphans);
-        }
-        return orphans;
+        return new RemovalConfirmation(orphansOf(removed), confirmedRemovals).requireConfirmed();
     }
 
     private Set<RoleId> applicationRoleIds(ApplicationId id) {
@@ -182,10 +164,6 @@ public class ApplicationAdminService implements ListApplications, GetApplication
         if (!applications.roleIds(app).contains(role)) {
             throw roleNotFound(app, role);
         }
-    }
-
-    private static Set<UserId> ids(List<UserSummary> summaries) {
-        return summaries.stream().map(UserSummary::id).collect(Collectors.toSet());
     }
 
     private static NotFoundException applicationNotFound(ApplicationId id) {

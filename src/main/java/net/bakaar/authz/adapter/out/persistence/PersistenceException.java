@@ -1,8 +1,8 @@
 package net.bakaar.authz.adapter.out.persistence;
 
-public class PersistenceException extends RuntimeException {
+class PersistenceException extends RuntimeException {
 
-    public PersistenceException(String message, Throwable cause) {
+    PersistenceException(String message, Throwable cause) {
         super(message, cause);
     }
 }

@@ -10,8 +10,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
-import net.bakaar.authz.application.domain.model.UserId;
-import net.bakaar.authz.application.domain.model.Username;
+import net.bakaar.authz.domain.UserId;
+import net.bakaar.authz.domain.Username;
 
 /**
  * Reads the urlencoded forms htmx sends. Text fields are trimmed; a missing field reads as empty.

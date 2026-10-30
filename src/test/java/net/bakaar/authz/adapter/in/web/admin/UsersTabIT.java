@@ -22,7 +22,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
-import net.bakaar.authz.Main;
+import net.bakaar.authz.configuration.AuthorizationServerConfiguration;
 import net.bakaar.authz.common.Ids;
 import net.bakaar.authz.support.AdminClient;
 import net.bakaar.authz.support.AdminClient.AdminCookies;
@@ -35,11 +35,11 @@ import org.junit.jupiter.api.Test;
 /**
  * End to end: real server, real PostgreSQL, {@link FakeKeycloak} as identity provider.
  */
-class UsersTabTest {
+class UsersTabIT {
 
     private static TestDatabase database;
     private static FakeKeycloak keycloak;
-    private static Main.RunningServer server;
+    private static AuthorizationServerConfiguration.RunningServer server;
     private static AdminCookies admin;
     private static AdminCookies reader;
 
@@ -47,7 +47,7 @@ class UsersTabTest {
     static void setUp() throws Exception {
         database = new TestDatabase();
         keycloak = new FakeKeycloak();
-        server = Main.start(config());
+        server = AuthorizationServerConfiguration.start(config());
         database.insertFixtures();
         insertUserWithRole("<b>x</b>", database.idOf("role", "crm/viewer"));
         admin = AdminClient.login(server.port(), keycloak, "ada", "authz-admin");

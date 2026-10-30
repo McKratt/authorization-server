@@ -1,10 +1,10 @@
 @import java.util.List
 @import net.bakaar.authz.adapter.in.web.admin.ApplicationColors
-@import net.bakaar.authz.adapter.in.web.admin.UsersRoutes
-@import net.bakaar.authz.adapter.in.web.admin.auth.AdminSession
-@import net.bakaar.authz.application.domain.model.ApplicationGrants
-@import net.bakaar.authz.application.domain.model.RoleSummary
-@import net.bakaar.authz.application.domain.model.UserAccess
+@import net.bakaar.authz.adapter.in.web.admin.FilterTexts
+@import net.bakaar.authz.adapter.in.web.admin.AdminSession
+@import net.bakaar.authz.domain.ApplicationGrants
+@import net.bakaar.authz.domain.RoleSummary
+@import net.bakaar.authz.domain.UserAccess
 @param AdminSession session
 @param List<UserAccess> users
 <div class="card">
@@ -27,7 +27,7 @@
     @for(UserAccess user : users)
         !{String userUrl = "/admin/users/" + user.id().asString();}
         !{int rows = Math.max(1, user.applications().size());}
-        <tbody data-filter="${UsersRoutes.filterText(user)}">
+        <tbody data-filter="${FilterTexts.of(user)}">
         @for(int i = 0; i < rows; i++)
             <tr>
                 @if(i == 0)

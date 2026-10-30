@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
@@ -43,7 +43,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import net.bakaar.authz.Main;
+import net.bakaar.authz.configuration.AuthorizationServerConfiguration;
 import net.bakaar.authz.support.AdminClient;
 import net.bakaar.authz.support.AdminClient.AdminCookies;
 import net.bakaar.authz.support.AdminClient.LoginStart;
@@ -58,17 +58,17 @@ import org.junit.jupiter.api.Test;
  * End to end: real server, real PostgreSQL, {@link FakeKeycloak} as identity provider. The sign-in flow never
  * touches the database, but the users tab it lands on does.
  */
-class AdminAuthTest {
+class AdminAuthIT {
 
     private static TestDatabase database;
     private static FakeKeycloak keycloak;
-    private static Main.RunningServer server;
+    private static AuthorizationServerConfiguration.RunningServer server;
 
     @BeforeAll
     static void setUp() {
         database = new TestDatabase();
         keycloak = new FakeKeycloak();
-        server = Main.start(config(keycloak.baseUrl(), database));
+        server = AuthorizationServerConfiguration.start(config(keycloak.baseUrl(), database));
     }
 
     @AfterAll
@@ -394,7 +394,7 @@ class AdminAuthTest {
     @Test
     void slowJwksWithinTheHttpTimeoutStillSignsIn() {
         try (FakeKeycloak slow = new FakeKeycloak();
-             Main.RunningServer offline = Main.start(config(slow.baseUrl(), null))) {
+             AuthorizationServerConfiguration.RunningServer offline = AuthorizationServerConfiguration.start(config(slow.baseUrl(), null))) {
             slow.delayJwks(Duration.ofMillis(1500));
 
             String session = AdminClient.sessionCookie(offline.port(), slow, "ada", "authz-admin");
@@ -411,9 +411,9 @@ class AdminAuthTest {
         Map<String, String> noRedirect = new HashMap<>(configValues(keycloak.baseUrl(), null));
         noRedirect.remove("admin.oidc.redirect-uri");
 
-        assertThatThrownBy(() -> Main.start(Config.just(ConfigSources.create(badKey))))
+        assertThatThrownBy(() -> AuthorizationServerConfiguration.start(Config.just(ConfigSources.create(badKey))))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("admin.session-key");
-        assertThatThrownBy(() -> Main.start(Config.just(ConfigSources.create(noRedirect))))
+        assertThatThrownBy(() -> AuthorizationServerConfiguration.start(Config.just(ConfigSources.create(noRedirect))))
                 .isInstanceOf(RuntimeException.class).hasMessageContaining("admin.oidc.redirect-uri");
 
         assertThat(poolHousekeepers()).as("pools left open by the failed starts").isSubsetOf(before);
@@ -463,7 +463,7 @@ class AdminAuthTest {
         try (ServerSocket socket = new ServerSocket(0)) {
             closedPort = socket.getLocalPort();
         }
-        try (Main.RunningServer offline = Main.start(config("http://localhost:" + closedPort, null))) {
+        try (AuthorizationServerConfiguration.RunningServer offline = AuthorizationServerConfiguration.start(config("http://localhost:" + closedPort, null))) {
             given().port(offline.port()).redirects().follow(false)
                     .when().get("/admin")
                     .then().statusCode(302)

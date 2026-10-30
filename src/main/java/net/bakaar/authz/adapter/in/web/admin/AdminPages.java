@@ -11,15 +11,14 @@ import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
 import java.util.HashMap;
 import java.util.Map;
-import net.bakaar.authz.adapter.in.web.admin.auth.AdminAuthFilter;
-import net.bakaar.authz.adapter.in.web.admin.auth.AdminSession;
-import net.bakaar.authz.adapter.in.web.admin.auth.AuthPages;
-import net.bakaar.authz.application.domain.model.NotFoundException;
+import lombok.RequiredArgsConstructor;
+import net.bakaar.authz.domain.NotFoundException;
 
 /**
  * Renders the precompiled jte templates of the admin UI with the headers every admin page carries.
  */
-public final class AdminPages implements AuthPages {
+@RequiredArgsConstructor
+final class AdminPages implements AuthPages {
 
     static final String CONTENT_SECURITY_POLICY = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'";
 
@@ -36,15 +35,11 @@ public final class AdminPages implements AuthPages {
 
     private final TemplateEngine templates;
 
-    public AdminPages(TemplateEngine templates) {
-        this.templates = templates;
-    }
-
     /**
      * True for htmx requests that want a fragment. A history restore (cache miss on back/forward) is an htmx
      * request too, but htmx swaps its response into the whole body, so it gets the full page.
      */
-    public static boolean isHtmx(ServerRequest request) {
+    static boolean isHtmx(ServerRequest request) {
         return request.headers().contains(HX_REQUEST) && !request.headers().contains(HX_HISTORY_RESTORE_REQUEST);
     }
 
@@ -99,7 +94,7 @@ public final class AdminPages implements AuthPages {
     /**
      * Error handler for {@link NotFoundException} (unknown or malformed ID): 404 with no body.
      */
-    public static void notFound(ServerRequest request, ServerResponse response, NotFoundException exception) {
+    static void notFound(ServerRequest request, ServerResponse response, NotFoundException exception) {
         response.status(Status.NOT_FOUND_404)
                 .header(HeaderNames.CACHE_CONTROL, "no-store")
                 .send();

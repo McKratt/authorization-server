@@ -16,7 +16,7 @@ import io.restassured.specification.RequestSpecification;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
-import net.bakaar.authz.Main;
+import net.bakaar.authz.configuration.AuthorizationServerConfiguration;
 import net.bakaar.authz.support.TestDatabase;
 import net.bakaar.authz.support.TestIdentityProvider;
 import org.junit.jupiter.api.AfterAll;
@@ -26,17 +26,17 @@ import org.junit.jupiter.api.Test;
 /**
  * End to end: real server, real PostgreSQL, WireMock as identity provider.
  */
-class AuthorizationApiTest {
+class AuthorizationApiIT {
 
     private static TestDatabase database;
     private static TestIdentityProvider idp;
-    private static Main.RunningServer server;
+    private static AuthorizationServerConfiguration.RunningServer server;
 
     @BeforeAll
     static void setUp() {
         database = new TestDatabase();
         idp = new TestIdentityProvider();
-        server = Main.start(Config.just(ConfigSources.create(Map.of(
+        server = AuthorizationServerConfiguration.start(Config.just(ConfigSources.create(Map.of(
                 "server.port", "0",
                 "db.url", database.jdbcUrl(),
                 "db.username", database.username(),

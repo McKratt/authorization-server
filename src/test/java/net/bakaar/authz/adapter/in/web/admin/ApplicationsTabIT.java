@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.bakaar.authz.Main;
+import net.bakaar.authz.configuration.AuthorizationServerConfiguration;
 import net.bakaar.authz.support.AdminClient;
 import net.bakaar.authz.support.AdminClient.AdminCookies;
 import net.bakaar.authz.support.FakeKeycloak;
@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
  * Applications tab, application dialog and its writes, end to end: real server, real PostgreSQL,
  * {@link FakeKeycloak} as identity provider. The fixtures are reset before every test.
  */
-class ApplicationsTabTest {
+class ApplicationsTabIT {
 
     private static final String CHANGED_TRIGGER = "{\"authz:changed\":true,\"authz:close-dialog\":true}";
     private static final String DIALOG_CHANGED_TRIGGER = "{\"authz:changed\":true}";
@@ -41,7 +41,7 @@ class ApplicationsTabTest {
 
     private static TestDatabase database;
     private static FakeKeycloak keycloak;
-    private static Main.RunningServer server;
+    private static AuthorizationServerConfiguration.RunningServer server;
     private static AdminCookies admin;
     private static AdminCookies reader;
 
@@ -49,7 +49,7 @@ class ApplicationsTabTest {
     static void setUp() {
         database = new TestDatabase();
         keycloak = new FakeKeycloak();
-        server = Main.start(config());
+        server = AuthorizationServerConfiguration.start(config());
         database.insertFixtures();
         admin = AdminClient.login(server.port(), keycloak, "ada", "authz-admin");
         reader = AdminClient.login(server.port(), keycloak, "rita", "authz-reader");

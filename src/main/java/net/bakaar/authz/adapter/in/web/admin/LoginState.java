@@ -1,4 +1,4 @@
-package net.bakaar.authz.adapter.in.web.admin.auth;
+package net.bakaar.authz.adapter.in.web.admin;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -13,7 +13,7 @@ import java.util.Objects;
  * @param returnTo     local {@code /admin} path to land on after sign-in
  * @param expiresAt    end of the sign-in attempt
  */
-public record LoginState(String state, String nonce, String codeVerifier, String returnTo, Instant expiresAt) {
+record LoginState(String state, String nonce, String codeVerifier, String returnTo, Instant expiresAt) {
 
     public LoginState {
         Objects.requireNonNull(state, "state");

@@ -1,8 +1,8 @@
 package net.bakaar.authz.application.port.in;
 
-import net.bakaar.authz.application.domain.model.UserId;
+import net.bakaar.authz.domain.UserId;
 
-public interface DeleteUser {
+public interface UserDeletion {
 
     void deleteUser(UserId id);
 }

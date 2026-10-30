@@ -1,9 +1,9 @@
 package net.bakaar.authz.application.port.in;
 
-import net.bakaar.authz.application.domain.model.UserAccess;
-import net.bakaar.authz.application.domain.model.UserId;
+import net.bakaar.authz.domain.UserAccess;
+import net.bakaar.authz.domain.UserId;
 
-public interface GetUser {
+public interface UserLookup {
 
     UserAccess getUser(UserId id);
 }

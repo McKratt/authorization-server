@@ -1,4 +1,4 @@
-package net.bakaar.authz.application.domain.model;
+package net.bakaar.authz.domain;
 
 /** A unique name is already taken; {@code field} is "username", "name" or "roleName". */
 public class NameConflictException extends RuntimeException {

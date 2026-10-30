@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
  * @param algorithms    accepted signature algorithms; asymmetric only
  * @param clockSkew     tolerance for {@code exp} and {@code nbf}
  */
-public record JwtSettings(String issuer,
+record JwtSettings(String issuer,
                           URI jwksUri,
                           Set<String> audiences,
                           String usernameClaim,
@@ -48,7 +48,7 @@ public record JwtSettings(String issuer,
         }
     }
 
-    public static JwtSettings fromConfig(Config jwt) {
+    static JwtSettings fromConfig(Config jwt) {
         URI jwksUri = URI.create(jwt.get("jwks-uri").asString().get());
         boolean allowInsecure = jwt.get("allow-insecure-jwks-uri").asBoolean().orElse(false);
         if (!"https".equals(jwksUri.getScheme()) && !allowInsecure) {
