@@ -21,7 +21,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <mainClass>net.bakaar.authz.AuthorizationServerApplication</mainClass>
 
-        <version.lib.rest-assured>6.2.0</version.lib.rest-assured>
+        <version.lib.rest-assured>6.3.0</version.lib.rest-assured>
         <version.lib.wiremock>3.13.2</version.lib.wiremock>
         <version.lib.assertj>3.27.7</version.lib.assertj>
         <version.lib.hikari>7.1.0</version.lib.hikari>
@@ -34,7 +34,7 @@
         <version.lib.lombok>1.18.48</version.lib.lombok>
         <version.lib.jspecify>1.0.1</version.lib.jspecify>
         <version.lib.archunit>1.5.1</version.lib.archunit>
-        <version.plugin.enforcer>3.6.3</version.plugin.enforcer>
+        <version.plugin.enforcer>3.7.0</version.plugin.enforcer>
     </properties>
 
     <dependencies>
