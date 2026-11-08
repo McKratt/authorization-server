@@ -26,11 +26,11 @@
         <version.lib.assertj>3.27.7</version.lib.assertj>
         <version.lib.hikari>7.1.0</version.lib.hikari>
         <version.lib.postgresql>42.7.14</version.lib.postgresql>
-        <version.lib.flyway>13.11.1</version.lib.flyway>
+        <version.lib.flyway>13.12.0</version.lib.flyway>
         <version.lib.testcontainers>2.0.5</version.lib.testcontainers>
         <version.lib.nimbus-jose-jwt>10.10</version.lib.nimbus-jose-jwt>
         <version.lib.tsid>2.1.4</version.lib.tsid>
-        <version.lib.jte>3.2.4</version.lib.jte>
+        <version.lib.jte>3.2.5</version.lib.jte>
         <version.lib.lombok>1.18.48</version.lib.lombok>
         <version.lib.jspecify>1.0.1</version.lib.jspecify>
         <version.lib.archunit>1.5.1</version.lib.archunit>
